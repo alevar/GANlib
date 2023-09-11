@@ -14,14 +14,16 @@ pub mod bundle;
 pub mod gene;
 pub mod transcriptome;
 
-mod prelude {
+pub(crate) mod factory;
+
+pub mod prelude {
     pub use crate::transcript::Transcript;
     pub use crate::exon::Exon;
     pub use crate::cds::CDS;
 
     pub use crate::treader::TReader;
 
-    use crate::object::Object;
+    use crate::object::{Object,ObjectT,Types};
 
     pub use crate::gene::Gene;
     pub use crate::transcriptome::Transcriptome;
@@ -29,3 +31,4 @@ mod prelude {
 
 pub use prelude::*;
 pub use txgroup::TXGroup;
+pub use factory::GTFObjectFactory;

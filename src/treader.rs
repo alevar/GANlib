@@ -8,6 +8,7 @@ use noodles_gff as gff;
 use noodles_gff::Line;
 
 use crate::object::Object;
+use crate::factory::GTFObjectFactory;
 
 // single treader - private struct to parse over a single file
 // used in TReader to parse over multiple simultaneously
@@ -150,7 +151,6 @@ impl TReader {
 impl Iterator for TReader {
     type Item = String;
     fn next(&mut self) -> Option<Self::Item>{
-        let mut line = String::new();
         // iterate over readers
         for (i,reader) in self.readers.iter_mut().enumerate() {
             // if reader is empty, skip
