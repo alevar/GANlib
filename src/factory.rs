@@ -1,4 +1,4 @@
-use crate::object::{Object, ObjectT, Types};
+use crate::object::{GffObject, GffObjectT, Types};
 use crate::transcript::Transcript;
 use crate::exon::Exon;
 use crate::cds::CDS;
@@ -6,9 +6,8 @@ use crate::cds::CDS;
 pub struct GTFObjectFactory;
 
 impl GTFObjectFactory {
-    fn create(line: &str) -> impl ObjectT {
-        let mut obj = Object::default();
-        obj.add_line(line);
+    fn create(line: &str) -> impl GffObjectT {
+        let mut obj = GffObject::new(line).unwrap();
         match obj.get_type() {
             Types::Transcript => Transcript::default(),//obj.to_transcript(),
             Types::Exon => Transcript::default(),//.to_exon(),

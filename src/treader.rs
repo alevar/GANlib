@@ -7,7 +7,7 @@ use noodles_gtf as gtf;
 use noodles_gff as gff;
 use noodles_gff::Line;
 
-use crate::object::Object;
+use crate::object::GffObject;
 use crate::factory::GTFObjectFactory;
 
 // single treader - private struct to parse over a single file
@@ -149,7 +149,7 @@ impl TReader {
 }
 
 impl Iterator for TReader {
-    type Item = String;
+    type Item = GffObject;
     fn next(&mut self) -> Option<Self::Item>{
         // iterate over readers
         for (i,reader) in self.readers.iter_mut().enumerate() {
@@ -160,7 +160,8 @@ impl Iterator for TReader {
             // if reader is not empty, return line
             if let Some(l) = reader.next() {
                 self.current_txs[i] = Some(l.clone());
-                return Some(l);
+                let mut gffobj = GffObject::from(l.as_str());
+                return Some(gffobj);
             }
             // if reader is empty, set to None
             self.current_txs[i] = None;

@@ -23,7 +23,8 @@ pub mod prelude {
 
     pub use crate::treader::TReader;
 
-    use crate::object::{Object,ObjectT,Types};
+    pub use crate::object::{GffObject,Types};
+    use crate::object::GffObjectT;
 
     pub use crate::gene::Gene;
     pub use crate::transcriptome::Transcriptome;

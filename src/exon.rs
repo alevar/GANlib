@@ -63,15 +63,15 @@ impl Exon {
     }
 }
 
-impl ObjectT for Exon {
+impl GffObjectT for Exon {
     fn new(line: &str) -> Option<Self> {
+        // let mut obj = GffObject::new(line).unwrap();
+        // match obj.get_type() {
+        //     Types::Transcript => Some(obj.to_transcript()),
+        //     _ => None,
+        // }
         let mut e = Exon::default();
-        e.add_line(line);
         Some(e)
-    }
-
-    fn add_line(&mut self, line: &str) -> Option<bool> {
-        Some(true)
     }
 
     fn get_type(&self) -> Types {

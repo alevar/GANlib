@@ -35,9 +35,8 @@ impl Display for Types{
     }
 }
 
-pub(crate) trait ObjectT: Clone + Ord + PartialOrd + Eq + PartialEq + Default {
+pub(crate) trait GffObjectT: Clone + Ord + PartialOrd + Eq + PartialEq + Default {
     fn new(line: &str) -> Option<Self>; // return None if line is invalid
-    fn add_line(&mut self, line: &str) -> Option<bool>; // returns None if line is invalid, Some(true) if line is valid and object was empty and info was stored
     fn start(&self) -> u32{
         self.interval().start
     }
@@ -67,47 +66,20 @@ pub(crate) trait ObjectT: Clone + Ord + PartialOrd + Eq + PartialEq + Default {
 
 // implement a generic object type which can then be specialized into anything
 #[derive(Debug, Clone)]
-pub(crate) struct Object {
+pub struct GffObject {
     seqid: String,
     strand: char,
     interval: Interval<u32>,
     source: String,
     obj_type: Types,
     attrs: HashMap<String, String>,
+    extra_attrs: HashMap<String,String>, // extra attributes that are not part of the GFF/GTF 9th column
 }
 
-impl ObjectT for Object {
+impl GffObjectT for GffObject {
     fn new(line: &str) -> Option<Self> {
-        let mut obj = Object::default();
-        obj.add_line(line)?;
+        let mut obj = GffObject::from(line);
         Some(obj)
-    }
-    fn add_line(&mut self, line: &str) -> Option<bool> {
-        let lcs: Vec<&str> = line.split('\t').collect();
-        if lcs.len() != 9 {
-            return None;
-        }
-        self.interval = Interval::new(lcs[3].parse::<u32>().ok()?..lcs[4].parse::<u32>().ok()?).ok()?;
-        self.source = lcs[1].to_string();
-        self.obj_type = match lcs[2] {
-            "gene" => Types::Gene,
-            "transcript" => Types::Transcript,
-            "exon" => Types::Exon,
-            "CDS" => Types::CDS,
-            "UTR" => Types::UTR,
-            "intron" => Types::Intron,
-            "intergenic" => Types::Intergenic,
-            _ => Types::Unknown,
-        };
-        let mut attrs = HashMap::new();
-        for attr in lcs[8].split(';') {
-            let kv: Vec<&str> = attr.split('=').collect();
-            if kv.len() != 2 {
-                continue;
-            }
-            attrs.insert(kv[0].to_string(), kv[1].to_string());
-        }
-        Some(true)
     }
     fn interval(&self) -> &Interval<u32> {
         &self.interval
@@ -153,22 +125,69 @@ impl ObjectT for Object {
     }
 }
 
-impl Default for Object {
+impl Default for GffObject {
     fn default() -> Self {
-        Object {
+        GffObject {
             seqid: String::new(),
             interval: Interval::new(0..0).unwrap(),
             source: String::from("GANLIB"),
             obj_type: Types::Unknown,
-            attrs: HashMap::new(),
             strand: '.',
+            attrs: HashMap::new(),
+            extra_attrs: HashMap::new(),
         }
     }
 }
 
-impl Eq for Object {}
+// implementation of from for GffObject conversion from string
+impl From<&str> for GffObject {
+    fn from(line: &str) -> Self {
+        // parse line (gtf or gff)
+        let mut obj = GffObject::default();
+        
+        let lcs: Vec<&str> = line.split('\t').collect();
+        if lcs.len() != 9 {
+            panic!("Invalid GFF/GTF line: {}", line);            
+        }
+        else{
+            obj.seqid = lcs[0].to_string();
+            obj.source = lcs[1].to_string();
+            obj.interval = Interval::new(lcs[3].parse::<u32>().unwrap()..lcs[4].parse::<u32>().unwrap()).unwrap();
+            obj.strand = lcs[6].chars().next().unwrap();
 
-impl PartialEq for Object {
+            obj.attrs = HashMap::new();
+            for attr in lcs[8].split(';') {
+                // split on either ' ' or '='
+                let mut kv = attr.split(|c| c==' ' || c=='=').collect::<Vec<&str>>();
+                if kv.len() != 2 {
+                    continue;
+                }
+                obj.attrs.insert(kv[0].to_string(), kv[1].to_string());
+            }
+
+            obj.obj_type = match lcs[2] {
+                "gene" => Types::Gene,
+                "transcript" => Types::Transcript,
+                "exon" => Types::Exon,
+                "CDS" => Types::CDS,
+                "UTR" => Types::UTR,
+                "intron" => Types::Intron,
+                "intergenic" => Types::Intergenic,
+                _ => Types::Unknown,
+            };
+            // add raw source information to the attributes just in case
+            obj.extra_attrs = HashMap::new();
+            obj.extra_attrs.insert("record_source".to_string(), lcs[2].to_string());
+
+            return obj;
+        }
+    }
+}
+
+
+impl Eq for GffObject {}
+
+impl PartialEq for GffObject {
     fn eq(&self, other: &Self) -> bool {
         self.strand == other.strand
             && self.seqid == other.seqid
@@ -179,7 +198,7 @@ impl PartialEq for Object {
     }
 }
 
-impl Ord for Object {
+impl Ord for GffObject {
     fn cmp(&self, other: &Self) -> Ordering {
         match self.interval.start.cmp(&other.interval.start) { // TODO: need to add seqid and strand
             Ordering::Equal => self.interval.end.cmp(&other.interval.end),
@@ -188,7 +207,7 @@ impl Ord for Object {
     }
 }
 
-impl PartialOrd for Object {
+impl PartialOrd for GffObject {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }

@@ -5,7 +5,7 @@ use bio::data_structures::interval_tree::{IntervalTree, IntervalTreeIterator, Ar
 use std::cmp::Ordering;
 use std::ops::Deref;
 
-use crate::object::{Object, ObjectT, Types};
+use crate::object::{GffObject, GffObjectT, Types};
 use crate::exon::Exon;
 
 
@@ -38,15 +38,15 @@ impl Default for Transcript {
     }
 }
 
-impl ObjectT for Transcript {
+impl GffObjectT for Transcript {
     fn new(line: &str) -> Option<Self> {
+        // let mut obj = GffObject::new(line).unwrap();
+        // match obj.get_type() {
+        //     Types::Transcript => Some(obj.to_transcript()),
+        //     _ => None,
+        // }
         let mut t = Transcript::default();
-        t.add_line(line);
         Some(t)
-    }
-
-    fn add_line(&mut self, line: &str) -> Option<bool> {
-        Some(true)
     }
 
     fn get_type(&self) -> Types {
