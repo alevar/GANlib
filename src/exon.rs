@@ -2,19 +2,46 @@ use std::{collections::HashMap, cmp::Ordering};
 use bio::utils::Interval;
 use std::ops::Deref;
 
-use crate::object::*
-;
+use crate::object::*;
+use crate::transcript::Transcript;
 
 #[derive(Clone, Debug)]
 pub struct Exon {
-    seqid: String,
+    pub(crate) seqid: String,
     strand: char,
     interval: Interval<u32>,
     source: String,
     tid: Option<String>,
     gid: Option<String>,
     attrs: HashMap<String, String>,
+    extra_attrs: HashMap<String, String>,
     obj_type: Types,
+}
+
+impl From<GffObject> for Exon {
+    fn from(gff_object: GffObject) -> Self {
+        let mut exon = Exon {
+                                seqid: gff_object.seqid().to_string(),
+                                strand: gff_object.strand(),
+                                interval: gff_object.interval().clone(),
+                                source: gff_object.source().to_string(),
+                                obj_type: Types::Exon,
+                                attrs: gff_object.get_attrs().clone(),
+                                extra_attrs: HashMap::new(),
+                                tid: None,
+                                gid: None,
+                            };
+        // extract tid and gid
+        exon.tid = exon.get_attr("transcript_id").map(|x| x.to_string());
+        exon.gid = exon.get_attr("gene_id").map(|x| x.to_string());
+        exon
+    }
+}
+impl From<Transcript> for Exon {
+    fn from(tx: Transcript) -> Self {
+        let obj: GffObject = tx.into();
+        Self::from(obj)
+    }
 }
 
 impl Default for Exon {
@@ -23,27 +50,20 @@ impl Default for Exon {
             seqid: String::new(),
             strand: '.',
             source: String::from("GANLIB"),
-            interval: Interval::new(0..0).unwrap(),
+            interval: Interval::default(),
             tid: None,
             gid: None,
             attrs: HashMap::new(),
+            extra_attrs: HashMap::new(),
             obj_type: Types::Exon,
         }
     }
 }
 
+// public interface
 impl Exon {
     pub fn new() -> Self {
-        Exon {
-            seqid: String::new(),
-            strand: '.',
-            interval: Interval::default(),
-            source: String::from("GANLIB"),
-            tid: None,
-            gid: None,
-            attrs: HashMap::new(),
-            obj_type: Types::Exon,
-        }
+        Self::default()
     }
 
     pub fn set_tid(&mut self, tid: String) {
@@ -77,7 +97,12 @@ impl GffObjectT for Exon {
     fn get_type(&self) -> Types {
         Types::Transcript
     }
-
+    fn seqid(&self) -> &str {
+        &self.seqid
+    }
+    fn strand(&self) -> char {
+        self.strand
+    }
     fn interval(&self) -> &Interval<u32> {
         &self.interval
     }
@@ -117,6 +142,12 @@ impl GffObjectT for Exon {
                                         self.strand,
                                         self.phase().unwrap_or(0),
                                         self.attrs.iter().map(|(k,v)| format!("{}={};", k, v)).collect::<Vec<String>>().join(" "))
+    }
+    fn get_attrs(&self) -> &HashMap<String, String> {
+        &self.attrs
+    }
+    fn get_attrs_mut(&mut self) -> &mut HashMap<String, String> {
+        &mut self.attrs
     }
 }
 

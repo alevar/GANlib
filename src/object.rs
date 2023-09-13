@@ -1,6 +1,6 @@
 
 use std::collections::HashMap;
-use bio::data_structures::interval_tree::IntervalTree;
+use bio::data_structures::interval_tree::ArrayBackedIntervalTree;
 use bio::utils::Interval;
 use std::cmp::Ordering;
 use std::fmt::{Formatter,Display};
@@ -43,6 +43,8 @@ pub(crate) trait GffObjectT: Clone + Ord + PartialOrd + Eq + PartialEq + Default
     fn end(&self) -> u32{
         self.interval().end
     }
+    fn seqid(&self) -> &str;
+    fn strand(&self) -> char;
     fn get_type(&self) -> Types;
     fn source(&self) -> &str;
     fn score(&self) -> Option<f32>{
@@ -51,15 +53,21 @@ pub(crate) trait GffObjectT: Clone + Ord + PartialOrd + Eq + PartialEq + Default
     fn phase(&self) -> Option<u32>{
         None
     }
-    // fn id(&self) -> Option<&str>;
-    // fn attrs(&self) -> &HashMap<String, String>;
-    // fn set_attr(&mut self, key: &str, value: String);
+    fn get_attr(&self, key: &str) -> Option<&String> {
+        self.get_attrs().get(key)
+    }
+    fn set_attr(&mut self, key: &str, value: String) {
+        self.get_attrs_mut().insert(key.to_string(), value);
+    }
+    fn get_attrs(&self) -> &HashMap<String, String>{
+        unimplemented!()
+    }
+    fn get_attrs_mut(&mut self) -> &mut HashMap<String, String>{
+        unimplemented!()
+    }
     fn bed(&self) -> String;
     fn gtf(&self) -> String;
     fn gff(&self) -> String;
-    // fn equals<T: ObjectT>(&self, other: &T) -> bool;
-    // fn to_transcript(&self) -> Transcript;
-    // fn to_exon(&self) -> Exon;
     fn interval(&self) -> &Interval<u32>;
 }
 
@@ -80,6 +88,12 @@ impl GffObjectT for GffObject {
     fn new(line: &str) -> Option<Self> {
         let mut obj = GffObject::from(line);
         Some(obj)
+    }
+    fn seqid(&self) -> &str {
+        &self.seqid
+    }
+    fn strand(&self) -> char {
+        self.strand
     }
     fn interval(&self) -> &Interval<u32> {
         &self.interval
@@ -122,6 +136,23 @@ impl GffObjectT for GffObject {
                 self.strand,
                 self.phase().unwrap_or(0),
                 self.attrs.iter().map(|(k,v)| format!("{}={};", k, v)).collect::<Vec<String>>().join(" "))
+    }
+    fn get_attrs(&self) -> &HashMap<String, String> {
+        &self.attrs
+    }
+    fn get_attrs_mut(&mut self) -> &mut HashMap<String, String> {
+        &mut self.attrs
+    }
+}
+
+impl From<Exon> for GffObject {
+    fn from(exon: Exon) -> GffObject {
+        unimplemented!()
+    }
+}
+impl From<Transcript> for GffObject {
+    fn from(tx: Transcript) -> GffObject {
+        unimplemented!()
     }
 }
 

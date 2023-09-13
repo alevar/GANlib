@@ -1,37 +1,44 @@
 use ganlib::prelude::*;
 
-struct MyStruct {
-    data: Vec<i32>,
-    index: usize,
+// Define the two structs
+#[derive(Clone, Debug)]
+struct StructA {
+    data: i32,
 }
 
-impl MyStruct {
-    fn new(data: Vec<i32>) -> MyStruct {
-        MyStruct { data, index: 0 }
+#[derive(Clone, Debug)]
+struct StructB {
+    data: i32,
+}
+
+// // Implement the Into trait for converting from StructA to StructB
+// impl Into<StructB> for StructA {
+//     fn into(self) -> StructB {
+//         StructB { data: self.data }
+//     }
+// }
+
+impl From<StructA> for StructB {
+    fn from(other: StructA) -> StructB {
+        StructB { data: other.data }
     }
 }
 
-impl<'a> IntoIterator for &'a MyStruct {
-    type Item = &'a i32; // This specifies that the iterator yields references to i32.
-
-    type IntoIter = std::slice::Iter<'a, i32>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.data.iter()
+// Implement the From trait for converting from StructB to StructA
+impl From<StructB> for StructA {
+    fn from(other: StructB) -> StructA {
+        StructA { data: other.data }
     }
 }
 
 fn main() {
-    let my_struct = MyStruct::new(vec![1, 2, 3, 4, 5]);
+    let struct_a = StructA { data: 42 };
+    let struct_b: StructB = struct_a.clone().into(); // Convert from StructA to StructB
+    let struct_a_again: StructA = StructA::from(struct_b.clone()); // Convert from StructB to StructA
 
-    for item in &my_struct {
-        println!("Item: {}", item);
-        break;
-    }
-
-    for item in &my_struct {
-        println!("Item: {}", item);
-    }
+    println!("StructA data: {}", struct_a.data);
+    println!("StructB data: {}", struct_b.data);
+    println!("StructA data again: {}", struct_a_again.data);
 }
 
 
