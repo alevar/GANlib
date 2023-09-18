@@ -1,14 +1,9 @@
-use std::arch::x86_64::_mm_sha1nexte_epu32;
 use std::fs::File;
 use std::error::Error;
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
-use std::str::FromStr;
-use noodles_gtf as gtf;
-use noodles_gff as gff;
-use noodles_gff::Line;
 
-use crate::object::GffObject;
-use crate::factory::GTFObjectFactory;
+use crate::object::{GffObject, GffObjectT};
+use crate::factory::GffObjectFactory;
 
 // single treader - private struct to parse over a single file
 // used in TReader to parse over multiple simultaneously
@@ -22,7 +17,7 @@ struct STReader {
 impl STReader{
     pub fn new(fname: &str) -> Result<STReader,Box<dyn Error>>{
         let file = File::open(fname)?;
-        let mut reader = BufReader::new(file);
+        let reader = BufReader::new(file);
 
         // read some lines to determine if gtf or gff
         let mut streader = STReader{fname:fname.to_string(),
@@ -116,11 +111,12 @@ pub struct TReader {
     fnames: Vec<String>,
     readers: Vec<STReader>,
     current_txs : Vec<Option<String>>,
+    factory : GffObjectFactory,
 }
 
 impl Default for TReader {
     fn default() -> Self {
-        TReader{fnames:vec![],readers:vec![],current_txs:vec![]}
+        TReader{fnames:vec![],readers:vec![],current_txs:vec![],factory:GffObjectFactory::default()}
     }
 }
 
@@ -149,7 +145,7 @@ impl TReader {
 }
 
 impl Iterator for TReader {
-    type Item = GffObject;
+    type Item = Box<dyn GffObjectT>;
     fn next(&mut self) -> Option<Self::Item>{
         // iterate over readers
         for (i,reader) in self.readers.iter_mut().enumerate() {
@@ -160,8 +156,12 @@ impl Iterator for TReader {
             // if reader is not empty, return line
             if let Some(l) = reader.next() {
                 self.current_txs[i] = Some(l.clone());
-                let mut gffobj = GffObject::from(l.as_str());
-                return Some(gffobj);
+                
+                let robj = match self.factory.create(l.as_str()){
+                    Ok(obj) => obj,
+                    Err(e) => {panic!("Error parsing line: {}",e);},
+                };
+                return Some(robj);
             }
             // if reader is empty, set to None
             self.current_txs[i] = None;

@@ -5,7 +5,6 @@ extern crate bio;
 mod object;
 pub mod transcript;
 pub mod exon;
-pub mod cds;
 
 pub mod treader;
 
@@ -19,7 +18,6 @@ pub(crate) mod factory;
 pub mod prelude {
     pub use crate::transcript::Transcript;
     pub use crate::exon::Exon;
-    pub use crate::cds::CDS;
 
     pub use crate::treader::TReader;
 
@@ -32,4 +30,4 @@ pub mod prelude {
 
 pub use prelude::*;
 pub use txgroup::TXGroup;
-pub use factory::GTFObjectFactory;
+pub use factory::GffObjectFactory;

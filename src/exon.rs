@@ -1,15 +1,20 @@
 use std::{collections::HashMap, cmp::Ordering};
 use bio::utils::Interval;
-use std::ops::Deref;
+use std::error::Error;
 
 use crate::object::*;
 use crate::transcript::Transcript;
 
+// CDS should be represented within exons
+// transcript should store reference to the start of the cds
+// and exons should have a method for deleang with CDS only
+
 #[derive(Clone, Debug)]
 pub struct Exon {
-    pub(crate) seqid: String,
+    seqid: String,
     strand: char,
     interval: Interval<u32>,
+    cds_interval: Interval<u32>,
     source: String,
     tid: Option<String>,
     gid: Option<String>,
@@ -24,6 +29,7 @@ impl From<GffObject> for Exon {
                                 seqid: gff_object.seqid().to_string(),
                                 strand: gff_object.strand(),
                                 interval: gff_object.interval().clone(),
+                                cds_interval: Interval::new(0..0).unwrap(),
                                 source: gff_object.source().to_string(),
                                 obj_type: Types::Exon,
                                 attrs: gff_object.get_attrs().clone(),
@@ -51,6 +57,7 @@ impl Default for Exon {
             strand: '.',
             source: String::from("GANLIB"),
             interval: Interval::default(),
+            cds_interval: Interval::default(),
             tid: None,
             gid: None,
             attrs: HashMap::new(),
@@ -62,8 +69,18 @@ impl Default for Exon {
 
 // public interface
 impl Exon {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(line: &str) -> Result<Self,Box<dyn Error>> {
+        match GffObject::try_from(line){
+            Ok(obj) => Ok(Exon::from(obj)),
+            Err(e) => Err(e),
+        }
+    }
+
+    pub fn set_cds(&mut self, cds: Interval<u32>) {
+        self.cds_interval = cds;
+    }
+    pub fn is_coding(&self) -> bool {
+        self.cds_interval.len() > 0
     }
 
     pub fn set_tid(&mut self, tid: String) {
@@ -84,16 +101,6 @@ impl Exon {
 }
 
 impl GffObjectT for Exon {
-    fn new(line: &str) -> Option<Self> {
-        // let mut obj = GffObject::new(line).unwrap();
-        // match obj.get_type() {
-        //     Types::Transcript => Some(obj.to_transcript()),
-        //     _ => None,
-        // }
-        let mut e = Exon::default();
-        Some(e)
-    }
-
     fn get_type(&self) -> Types {
         Types::Transcript
     }

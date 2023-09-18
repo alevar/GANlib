@@ -1,9 +1,8 @@
-
 use std::collections::HashMap;
-use bio::data_structures::interval_tree::ArrayBackedIntervalTree;
 use bio::utils::Interval;
 use std::cmp::Ordering;
 use std::fmt::{Formatter,Display};
+use std::error::Error;
 
 
 use crate::transcript::Transcript;
@@ -35,8 +34,8 @@ impl Display for Types{
     }
 }
 
-pub(crate) trait GffObjectT: Clone + Ord + PartialOrd + Eq + PartialEq + Default {
-    fn new(line: &str) -> Option<Self>; // return None if line is invalid
+pub trait GffObjectT {
+    // fn new(line: &str) -> Result<Self,Box<dyn Error>>; // return None if line is invalid
     fn start(&self) -> u32{
         self.interval().start
     }
@@ -82,13 +81,17 @@ pub struct GffObject {
     obj_type: Types,
     attrs: HashMap<String, String>,
     extra_attrs: HashMap<String,String>, // extra attributes that are not part of the GFF/GTF 9th column
+    // TODO: add children - any object should be able to inherit children when converted from something like transcript or gene, or anyhting else
+    //     It might not be able to do anything with the children, but should be able to store them
+}
+
+impl GffObject{
+    pub fn new(line: &str) -> Result<GffObject,Box<dyn Error>> {
+        GffObject::try_from(line)
+    }
 }
 
 impl GffObjectT for GffObject {
-    fn new(line: &str) -> Option<Self> {
-        let mut obj = GffObject::from(line);
-        Some(obj)
-    }
     fn seqid(&self) -> &str {
         &self.seqid
     }
@@ -147,12 +150,26 @@ impl GffObjectT for GffObject {
 
 impl From<Exon> for GffObject {
     fn from(exon: Exon) -> GffObject {
-        unimplemented!()
+        let mut obj = GffObject::default();
+        obj.seqid = exon.seqid().to_string();
+        obj.strand = exon.strand();
+        obj.interval = exon.interval().clone();
+        obj.source = exon.source().to_string();
+        obj.obj_type = exon.get_type();
+        obj.attrs = exon.get_attrs().clone();
+        obj
     }
 }
 impl From<Transcript> for GffObject {
     fn from(tx: Transcript) -> GffObject {
-        unimplemented!()
+        let mut obj = GffObject::default();
+        obj.seqid = tx.seqid().to_string();
+        obj.strand = tx.strand();
+        obj.interval = tx.interval().clone();
+        obj.source = tx.source().to_string();
+        obj.obj_type = tx.get_type();
+        obj.attrs = tx.get_attrs().clone();
+        obj
     }
 }
 
@@ -171,14 +188,15 @@ impl Default for GffObject {
 }
 
 // implementation of from for GffObject conversion from string
-impl From<&str> for GffObject {
-    fn from(line: &str) -> Self {
+impl TryFrom<&str> for GffObject {
+    type Error = Box<dyn Error>;
+    fn try_from(line: &str) -> Result<Self,Self::Error> {
         // parse line (gtf or gff)
         let mut obj = GffObject::default();
         
         let lcs: Vec<&str> = line.split('\t').collect();
         if lcs.len() != 9 {
-            panic!("Invalid GFF/GTF line: {}", line);            
+            Err(format!("Invalid number of columns in GFF/GTF line: {}", line).into())
         }
         else{
             obj.seqid = lcs[0].to_string();
@@ -210,7 +228,7 @@ impl From<&str> for GffObject {
             obj.extra_attrs = HashMap::new();
             obj.extra_attrs.insert("record_source".to_string(), lcs[2].to_string());
 
-            return obj;
+            return Ok(obj);
         }
     }
 }

@@ -3,7 +3,7 @@ use std::fmt::format;
 use bio::utils::Interval;
 use bio::data_structures::interval_tree::ArrayBackedIntervalTree;
 use std::cmp::Ordering;
-use std::ops::Deref;
+use std::error::Error;
 
 use crate::object::{GffObject, GffObjectT, Types};
 use crate::exon::Exon;
@@ -40,6 +40,22 @@ impl Default for Transcript {
     }
 }
 
+impl Transcript{
+    fn new(line: &str) -> Result<Self,Box<dyn Error>> {
+        match GffObject::try_from(line){
+            Ok(obj) => Ok(Transcript::from(obj)),
+            Err(e) => Err(e),
+        }
+    }
+    // get reference to the first exon with a cds entry
+    fn first_coding_exon(&self) -> Option<&Exon>{
+        match self.exons.into_iter().filter(|x| x.data().is_coding()).next(){
+            Some(exon) => Some(exon.data()),
+            None => None,
+        }
+    }
+}
+
 impl From<GffObject> for Transcript {
     fn from(gff_object: GffObject) -> Self {
         let mut exon = Transcript {
@@ -62,11 +78,6 @@ impl From<GffObject> for Transcript {
 }
 
 impl GffObjectT for Transcript {
-    fn new(line: &str) -> Option<Self> {
-        let mut t = Transcript::default();
-        Some(t)
-    }
-
     fn get_type(&self) -> Types {
         Types::Transcript
     }
