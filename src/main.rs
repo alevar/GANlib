@@ -1,4 +1,5 @@
 use ganlib::prelude::*;
+use bio::utils::Interval;
 
 
 fn main() {

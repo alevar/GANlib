@@ -47,6 +47,14 @@ impl Transcript{
             Err(e) => Err(e),
         }
     }
+
+    pub fn exons(&self) -> &ArrayBackedIntervalTree<u32,Exon> {
+        &self.exons
+    }
+    pub fn exons_mut(&mut self) -> &mut ArrayBackedIntervalTree<u32,Exon> {
+        &mut self.exons
+    }
+
     // get reference to the first exon with a cds entry
     fn first_coding_exon(&self) -> Option<&Exon>{
         match self.exons.into_iter().filter(|x| x.data().is_coding()).next(){
@@ -57,8 +65,34 @@ impl Transcript{
 }
 
 impl From<GffObject> for Transcript {
+    /// Convert a GffObject into a Transcript
+    /// Will only assign transcript_id and gene_id if present in the GffObject
+    /// Otherwise if not present will assign None
+    /// transcript_id and gene_id need to be assigned manually if not inferred from GffObject
+    /// 
+    /// # Arguments
+    /// 
+    /// * `gff_object` - A GffObject
+    /// 
+    /// # Example
+    /// 
+    /// ```
+    /// use ganlib::prelude::*;
+    /// use ganlib::object::GffObject;
+    /// use ganlib::transcript::Transcript;
+    /// use bio::utils::Interval;
+    /// 
+    /// let gffobj = GffObject::new("chr1\t.\ttranscript\t11869\t14409\t.\t+\t.\tgene_id \"ENSG00000223972.5\"; transcript_id \"ENST00000456328.2\"; gene_type \"transcribed_unprocessed_pseudogene\"; gene_status \"KNOWN\"; gene_name \"DDX11L1\"; transcript_type \"processed_transcript\"; transcript_status \"KNOWN\"; transcript_name \"DDX11L1-202\"; level 2; havana_gene \"OTTHUMG00000000961.2\"; havana_transcript \"OTTHUMT00000362751.1\"; tag \"basic\"; transcript_support_level \"1\";").unwrap();
+    /// let tx = Transcript::from(gffobj);
+    /// assert_eq!(tx.seqid(),"chr1");
+    /// assert_eq!(tx.strand(),'+');
+    /// assert_eq!(tx.interval(),&Interval::new(11869..14409).unwrap());
+    /// assert_eq!(tx.source(),".");
+    /// assert_eq!(tx.get_attr("gene_id"),Some("ENSG00000223972.5"));
+    /// assert_eq!(tx.get_attr("transcript_id"),Some("ENST00000456328.2"));
+    /// ```
     fn from(gff_object: GffObject) -> Self {
-        let mut exon = Transcript {
+        let mut tx = Transcript {
                                 seqid: gff_object.seqid().to_string(),
                                 strand: gff_object.strand(),
                                 interval: gff_object.interval().clone(),
@@ -70,10 +104,12 @@ impl From<GffObject> for Transcript {
                                 tid: None,
                                 gid: None,
                             };
+
         // extract tid and gid
-        exon.tid = exon.get_attr("transcript_id").map(|x| x.to_string());
-        exon.gid = exon.get_attr("gene_id").map(|x| x.to_string());
-        exon
+        tx.tid = tx.get_attr("transcript_id").map(|x| x.to_string());
+        // repeat for gid
+        tx.gid = tx.get_attr("transcript_id").map(|x| x.to_string());
+        tx
     }
 }
 

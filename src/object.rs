@@ -74,15 +74,14 @@ pub trait GffObjectT {
 // implement a generic object type which can then be specialized into anything
 #[derive(Debug, Clone)]
 pub struct GffObject {
-    seqid: String,
-    strand: char,
-    interval: Interval<u32>,
-    source: String,
-    obj_type: Types,
-    attrs: HashMap<String, String>,
+    pub seqid: String,
+    pub strand: char,
+    pub interval: Interval<u32>,
+    pub source: String,
+    pub obj_type: Types,
+    pub attrs: HashMap<String, String>,
     extra_attrs: HashMap<String,String>, // extra attributes that are not part of the GFF/GTF 9th column
-    // TODO: add children - any object should be able to inherit children when converted from something like transcript or gene, or anyhting else
-    //     It might not be able to do anything with the children, but should be able to store them
+    children: Vec<GffObject>, // TODO: add children - any object should be able to inherit children when converted from something like transcript or gene, or anyhting else. It might not be able to do anything with the children, but should be able to store them
 }
 
 impl GffObject{
@@ -169,6 +168,9 @@ impl From<Transcript> for GffObject {
         obj.source = tx.source().to_string();
         obj.obj_type = tx.get_type();
         obj.attrs = tx.get_attrs().clone();
+        for exon in tx.exons(){
+            obj.children.push(GffObject::from(exon.data().clone()));
+        }
         obj
     }
 }
@@ -183,6 +185,7 @@ impl Default for GffObject {
             strand: '.',
             attrs: HashMap::new(),
             extra_attrs: HashMap::new(),
+            children: vec![],
         }
     }
 }
@@ -207,23 +210,79 @@ impl TryFrom<&str> for GffObject {
             obj.attrs = HashMap::new();
             for attr in lcs[8].split(';') {
                 // split on either ' ' or '='
-                let mut kv = attr.split(|c| c==' ' || c=='=').collect::<Vec<&str>>();
+                let mut kv = attr.trim().split(|c| c==' ' || c=='=').collect::<Vec<&str>>();
                 if kv.len() != 2 {
                     continue;
                 }
-                obj.attrs.insert(kv[0].to_string(), kv[1].to_string());
+                obj.attrs.insert(kv[0].to_lowercase().to_string(), kv[1].trim_matches('"').to_string());
             }
 
-            obj.obj_type = match lcs[2] {
+            obj.obj_type = match lcs[2].to_lowercase().as_str() {
                 "gene" => Types::Gene,
                 "transcript" => Types::Transcript,
+                "mrna" => Types::Transcript,
                 "exon" => Types::Exon,
-                "CDS" => Types::CDS,
-                "UTR" => Types::UTR,
+                "cds" => Types::CDS,
+                "utr" => Types::UTR,
                 "intron" => Types::Intron,
                 "intergenic" => Types::Intergenic,
                 _ => Types::Unknown,
             };
+
+            // process some type-specific policies
+            match obj.obj_type {
+                // if transcript type - must have transcript_id and gene_id
+                Types::Transcript => {
+                    // rename potential ID attribute to transcript_id
+                    if let Some(id) = obj.attrs.remove("id") {
+                        obj.attrs.insert("transcript_id".to_string(), id);
+                    }
+                    if let Some(id) = obj.attrs.remove("parent") {
+                        obj.attrs.insert("gene_id".to_string(), id);
+                    }
+                },
+                Types::Exon => {
+                    if let Some(id) = obj.attrs.remove("id") {
+                        obj.attrs.insert("exon_id".to_string(), id);
+                    }
+                    if let Some(id) = obj.attrs.remove("parent") {
+                        obj.attrs.insert("transcript_id".to_string(), id);
+                    }
+                },
+                Types::CDS => {
+                    if let Some(id) = obj.attrs.remove("id") {
+                        obj.attrs.insert("cds_id".to_string(), id);
+                    }
+                    if let Some(id) = obj.attrs.remove("parent") {
+                        obj.attrs.insert("transcript_id".to_string(), id);
+                    }
+                },
+                Types::Gene => {
+                    if let Some(id) = obj.attrs.remove("id") {
+                        obj.attrs.insert("gene_id".to_string(), id);
+                    }
+                    if let Some(id) = obj.attrs.remove("parent") {
+                        obj.attrs.insert("gene_parent_id".to_string(), id);
+                    }
+                },
+                Types::Intron => {
+                    if let Some(id) = obj.attrs.remove("id") {
+                        obj.attrs.insert("intron_id".to_string(), id);
+                    }
+                    if let Some(id) = obj.attrs.remove("parent") {
+                        obj.attrs.insert("transcript_id".to_string(), id);
+                    }
+                },
+                Types::UTR => {
+                    if let Some(id) = obj.attrs.remove("id") {
+                        obj.attrs.insert("utr_id".to_string(), id);
+                    }
+                    if let Some(id) = obj.attrs.remove("parent") {
+                        obj.attrs.insert("transcript_id".to_string(), id);
+                    }
+                },
+                _ => {},
+            }
             // add raw source information to the attributes just in case
             obj.extra_attrs = HashMap::new();
             obj.extra_attrs.insert("record_source".to_string(), lcs[2].to_string());
@@ -249,8 +308,15 @@ impl PartialEq for GffObject {
 
 impl Ord for GffObject {
     fn cmp(&self, other: &Self) -> Ordering {
-        match self.interval.start.cmp(&other.interval.start) { // TODO: need to add seqid and strand
-            Ordering::Equal => self.interval.end.cmp(&other.interval.end),
+        // compare based on seqid, strand and interval
+        match self.seqid.cmp(&other.seqid) {
+            Ordering::Equal => match self.strand.cmp(&other.strand) {
+                Ordering::Equal => match self.interval.start.cmp(&other.interval.start) {
+                    Ordering::Equal => self.interval.end.cmp(&other.interval.end),
+                    other => other,
+                },
+                other => other,
+            },
             other => other,
         }
     }
@@ -262,3 +328,127 @@ impl PartialOrd for GffObject {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // test construction of default empty object and populating it with data after construction
+    #[test]
+    fn test_gffobject_from_default() {
+        let mut obj = GffObject::default();
+        assert_eq!(obj.seqid, "");
+        assert_eq!(obj.source, "GANLIB");
+        assert_eq!(obj.interval, Interval::new(0..0).unwrap());
+        assert_eq!(obj.strand, '.');
+        assert_eq!(obj.attrs.len(), 0);
+        assert_eq!(obj.obj_type, Types::Unknown);
+        assert_eq!(obj.extra_attrs.len(), 0);
+        obj.seqid = "chr1".to_string();
+        obj.source = "test".to_string();
+        obj.interval = Interval::new(1..10).unwrap();
+        obj.strand = '+';
+        obj.attrs.insert("test".to_string(), "test".to_string());
+        obj.obj_type = Types::Gene;
+        obj.extra_attrs.insert("test".to_string(), "test".to_string());
+        assert_eq!(obj.seqid, "chr1");
+        assert_eq!(obj.source, "test");
+        assert_eq!(obj.interval, Interval::new(1..10).unwrap());
+        assert_eq!(obj.strand, '+');
+        assert_eq!(obj.attrs.len(), 1);
+        assert_eq!(obj.attrs.get("test").unwrap(), "test");
+        assert_eq!(obj.obj_type, Types::Gene);
+        assert_eq!(obj.extra_attrs.len(), 1);
+        assert_eq!(obj.extra_attrs.get("test").unwrap(), "test");
+    }
+
+    #[test]
+    fn test_gffobject() {
+        let line = "chr1\t.\tgene\t11869\t14409\t.\t+\t.\tgene_id \"ENSG00000223972.5\"; gene_type \"transcribed_unprocessed_pseudogene\"; gene_name \"DDX11L1\"; level 2; havana_gene \"OTTHUMG00000000961.2\"; remap_status \"full_contig\";";
+        let obj = GffObject::new(line).unwrap();
+        assert_eq!(obj.seqid, "chr1");
+        assert_eq!(obj.source, ".");
+        assert_eq!(obj.interval, Interval::new(11869..14409).unwrap());
+        assert_eq!(obj.strand, '+');
+        assert_eq!(obj.attrs.len(), 6);
+        assert_eq!(obj.attrs.get("gene_id").unwrap(), "ENSG00000223972.5");
+        assert_eq!(obj.attrs.get("gene_type").unwrap(), "transcribed_unprocessed_pseudogene");
+        assert_eq!(obj.attrs.get("gene_name").unwrap(), "DDX11L1");
+        assert_eq!(obj.attrs.get("level").unwrap(), "2");
+        assert_eq!(obj.attrs.get("havana_gene").unwrap(), "OTTHUMG00000000961.2");
+        assert_eq!(obj.attrs.get("remap_status").unwrap(), "full_contig");
+        assert_eq!(obj.obj_type, Types::Gene);
+        assert_eq!(obj.extra_attrs.get("record_source").unwrap(), "gene");
+    }
+    
+    // test equality of two GffObjects
+    #[test]
+    fn test_gffobject_eq() {
+        // test equality
+        let line = "chr1\t.\tgene\t11869\t14409\t.\t+\t.\tgene_id \"ENSG00000223972.5\"; gene_type \"transcribed_unprocessed_pseudogene\"; gene_name \"DDX11L1\"; level 2; havana_gene \"OTTHUMG00000000961.2\"; remap_status \"full_contig\";";
+        let obj1 = GffObject::new(line).unwrap();
+        let obj2 = GffObject::new(line).unwrap();
+        assert_eq!(obj1, obj2);
+        // test inequality
+        let line = "chr1\t.\tgene\t11869\t14409\t.\t+\t.\tgene_id \"ENSG00000223972.5\"; gene_type \"transcribed_unprocessed_pseudogene\"; gene_name \"DDX11L1\"; level 2; havana_gene \"OTTHUMG00000000961.2\";";
+        let obj3 = GffObject::new(line).unwrap();
+        assert_ne!(obj1, obj3);
+    }
+    
+    // test ordering of two GffObjects
+    #[test]
+    fn test_gffobject_ord() {
+        // test equality, and ordering based on the seqid
+        let line = "chr1\t.\tgene\t11869\t14409\t.\t+\t.\tgene_id \"ENSG00000223972.5\"; gene_type \"transcribed_unprocessed_pseudogene\"; gene_name \"DDX11L1\"; level 2; havana_gene \"OTTHUMG00000000961.2\"; remap_status \"full_contig\";";
+        let obj1 = GffObject::new(line).unwrap();
+        let line = "chr2\t.\tgene\t11869\t14409\t.\t+\t.\tgene_id \"ENSG00000223972.5\"; gene_type \"transcribed_unprocessed_pseudogene\"; gene_name \"DDX11L1\"; level 2; havana_gene \"OTTHUMG00000000961.2\";";
+        let obj2 = GffObject::new(line).unwrap();
+        assert!(obj1 < obj2);
+
+        // test based on strand
+        let line = "chr1\t.\tgene\t11869\t14409\t.\t+\t.\tgene_id \"ENSG00000223972.5\"; gene_type \"transcribed_unprocessed_pseudogene\"; gene_name \"DDX11L1\"; level 2; havana_gene \"OTTHUMG00000000961.2\"; remap_status \"full_contig\";";
+        let obj1 = GffObject::new(line).unwrap();
+        let line = "chr1\t.\tgene\t11869\t14409\t.\t-\t.\tgene_id \"ENSG00000223972.5\"; gene_type \"transcribed_unprocessed_pseudogene\"; gene_name \"DDX11L1\"; level 2; havana_gene \"OTTHUMG00000000961.2\";";
+        let obj2 = GffObject::new(line).unwrap();
+        assert!(obj1 < obj2);
+
+        // test based on interval
+        let line = "chr1\t.\tgene\t11869\t14409\t.\t+\t.\tgene_id \"ENSG00000223972.5\"; gene_type \"transcribed_unprocessed_pseudogene\"; gene_name \"DDX11L1\"; level 2; havana_gene \"OTTHUMG00000000961.2\"; remap_status \"full_contig\";";
+        let obj1 = GffObject::new(line).unwrap();
+        let line = "chr1\t.\tgene\t11869\t14410\t.\t+\t.\tgene_id \"ENSG00000223972.5\"; gene_type \"transcribed_unprocessed_pseudogene\"; gene_name \"DDX11L1\";";
+        let obj2 = GffObject::new(line).unwrap();
+        assert!(obj1 < obj2);
+
+        // test seqid first and then strand
+        let line = "chr1\t.\tgene\t11869\t14409\t.\t+\t.\tgene_id \"ENSG00000223972.5\";";
+        let obj1 = GffObject::new(line).unwrap();
+        let line = "chr1\t.\tgene\t11869\t14409\t.\t-\t.\tgene_id \"ENSG00000223972.5\";";
+        let obj2 = GffObject::new(line).unwrap();
+        assert!(obj1 < obj2);
+        
+        // test seqid first, strand second and interval last
+        let line = "chr1\t.\tgene\t11869\t14409\t.\t+\t.\tgene_id \"ENSG00000223972.5\";";
+        let obj1 = GffObject::new(line).unwrap();
+        let line = "chr1\t.\tgene\t11869\t14410\t.\t+\t.\tgene_id \"ENSG00000223972.5\";";
+        let obj2 = GffObject::new(line).unwrap();
+        assert!(obj1 < obj2);
+    }
+
+    // test conversion to transcript
+    #[test]
+    fn test_gffobject_to_transcript() {
+        let line = "chr1\t.\tgene\t11869\t14409\t.\t+\t.\tgene_id \"ENSG00000223972.5\";";
+        let obj = GffObject::new(line).unwrap();
+        let tx = Transcript::from(obj);
+        assert_eq!(tx.seqid(), "chr1");
+        assert_eq!(tx.strand(), '+');
+        assert_eq!(tx.interval(), &Interval::new(11869..14409).unwrap());
+        assert_eq!(tx.get_type(), Types::Transcript);
+        assert_eq!(tx.get_attr("gene_id").unwrap(), "ENSG00000223972.5");
+        assert_eq!(tx.get_attr("transcript_id").unwrap(), "t1");
+        assert_eq!(tx.get_attr("gene_type"), None);
+        assert_eq!(tx.get_attr("gene_name"), None);
+        assert_eq!(tx.get_attr("level"), None);
+        assert_eq!(tx.get_attr("havana_gene"), None);
+        assert_eq!(tx.get_attr("remap_status"), None);
+    }
+}
