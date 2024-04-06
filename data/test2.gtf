@@ -1,0 +1,21 @@
+# DESCRIPTION: contains readthrough and overlapping transcription on different strands
+chr21	FANTOM	transcript	39341936	39349011	.	-	.	transcript_id "CHS.34775.2"; gene_id "CHS.34775"; gene_name "HMGN1";
+chr21	FANTOM	exon	39341936	39343159	.	-	.	transcript_id "CHS.34775.2"; gene_id "CHS.34775"; gene_name "HMGN1";
+chr21	FANTOM	transcript	39341936	39349088	.	-	.	transcript_id "CHS.34775.3"; gene_id "CHS.34775"; gene_name "HMGN1";
+chr21	FANTOM	exon	39341936	39343159	.	-	.	transcript_id "CHS.34775.3"; gene_id "CHS.34775"; gene_name "HMGN1";
+chr21	StringTie	transcript	39342299	39349442	.	-	.	transcript_id "CHS.34775.4"; gene_id "CHS.34775"; gene_name "HMGN1";
+chr21	StringTie	exon	39342299	39343159	.	-	.	transcript_id "CHS.34775.4"; gene_id "CHS.34775"; gene_name "HMGN1";
+chr21	Gnomon	transcript	39342315	39348577	.	-	.	transcript_id "CHS.34775.6"; gene_id "CHS.34775"; gene_name "HMGN1";
+chr21	Gnomon	exon	39342315	39343159	.	-	.	transcript_id "CHS.34775.6"; gene_id "CHS.34775"; gene_name "HMGN1";
+chr21	Gnomon	transcript	39342315	39348577	.	-	.	transcript_id "CHS.34775.7"; gene_id "CHS.34775"; gene_name "HMGN1";
+chr21	Gnomon	exon	39342315	39343159	.	-	.	transcript_id "CHS.34775.7"; gene_id "CHS.34775"; gene_name "HMGN1";
+chr21	Gnomon	transcript	39342315	39348577	.	-	.	transcript_id "CHS.34775.8"; gene_id "CHS.34775"; gene_name "HMGN1";
+chr21	Gnomon	exon	39342315	39343159	.	-	.	transcript_id "CHS.34775.8"; gene_id "CHS.34775"; gene_name "HMGN1";
+chr21	HAVANA	transcript	39342315	39348991	.	-	.	transcript_id "CHS.34775.9"; gene_id "CHS.34775"; gene_name "HMGN1";
+chr21	HAVANA	exon	39342315	39343159	.	-	.	transcript_id "CHS.34775.9"; gene_id "CHS.34775"; gene_name "HMGN1";
+chr21	Gnomon	transcript	39342315	39349051	.	-	.	transcript_id "CHS.34775.10"; gene_id "CHS.34775"; gene_name "HMGN1";
+chr21	Gnomon	exon	39342315	39343159	.	-	.	transcript_id "CHS.34775.10"; gene_id "CHS.34775"; gene_name "HMGN1";
+chr21	Gnomon	transcript	39342315	39349064	.	-	.	transcript_id "CHS.34775.11"; gene_id "CHS.34775"; gene_name "HMGN1";
+chr21	Gnomon	exon	39342315	39343159	.	-	.	transcript_id "CHS.34775.11"; gene_id "CHS.34775"; gene_name "HMGN1";
+chr21	StringTie	transcript	39342315	39349086	.	-	.	transcript_id "CHS.34775.12"; gene_id "CHS.34775"; gene_name "HMGN1";
+chr21	StringTie	exon	39342315	39343159	.	-	.	transcript_id "CHS.34775.12"; gene_id "CHS.34775"; gene_name "HMGN1";
