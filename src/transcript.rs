@@ -108,7 +108,7 @@ impl From<GffObject> for Transcript {
         // extract tid and gid
         tx.tid = tx.get_attr("transcript_id").map(|x| x.to_string());
         // repeat for gid
-        tx.gid = tx.get_attr("transcript_id").map(|x| x.to_string());
+        tx.gid = tx.get_attr("gene_id").map(|x| x.to_string());
         tx
     }
 }

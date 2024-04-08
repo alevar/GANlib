@@ -68,6 +68,16 @@ pub trait GffObjectT {
     fn gtf(&self) -> String;
     fn gff(&self) -> String;
     fn interval(&self) -> &Interval<u32>;
+    fn len(&self) -> u32{
+        (self.interval().end - self.interval().start)+1
+    }
+    fn overlaps(&self, other: &Self) -> bool{
+        self.seqid() == other.seqid() && self.interval().overlaps(other.interval())
+    }
+    fn contains(&self, other: &Self) -> bool{
+        self.seqid() == other.seqid() && self.interval().contains(other.interval())
+    }
+    
 }
 
 
@@ -444,7 +454,7 @@ mod tests {
         assert_eq!(tx.interval(), &Interval::new(11869..14409).unwrap());
         assert_eq!(tx.get_type(), Types::Transcript);
         assert_eq!(tx.get_attr("gene_id").unwrap(), "ENSG00000223972.5");
-        assert_eq!(tx.get_attr("transcript_id").unwrap(), "t1");
+        assert_eq!(tx.get_attr("transcript_id"), None);
         assert_eq!(tx.get_attr("gene_type"), None);
         assert_eq!(tx.get_attr("gene_name"), None);
         assert_eq!(tx.get_attr("level"), None);
