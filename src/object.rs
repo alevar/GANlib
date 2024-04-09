@@ -166,8 +166,8 @@ impl GffObjectGroupT for GffObject {
     fn num_elements(&self) -> usize {
         self.children.len()
     }
-    fn iter(&self) -> Box<dyn Iterator<Item = &Self>> {
-        Box::new(self.children.into_iter())
+    fn iter(&self) -> Box<dyn Iterator<Item = &Self> + '_> {
+        Box::new(self.children.into_iter().map(|entry| entry.data()))
     }
 }
 
@@ -474,5 +474,29 @@ mod tests {
         assert_eq!(tx.get_attr("level"), None);
         assert_eq!(tx.get_attr("havana_gene"), None);
         assert_eq!(tx.get_attr("remap_status"), None);
+    }
+
+    // test iteration over children of the object
+    #[test]
+    fn test_gffobject_children() {
+        let line = "chr1\t.\tgene\t11869\t14409\t.\t+\t.\tgene_id \"ENSG00000223972.5\";";
+        let mut obj = GffObject::new(line).unwrap();
+        let line = "chr1\t.\texon\t11869\t12227\t.\t+\t.\tgene_id \"ENSG00000223972.5\";";
+        let exon1 = GffObject::new(line).unwrap();
+        let line = "chr1\t.\texon\t12613\t12721\t.\t+\t.\tgene_id \"ENSG00000223972.5\";";
+        let exon2 = GffObject::new(line).unwrap();
+        let line = "chr1\t.\texon\t13220\t14409\t.\t+\t.\tgene_id \"ENSG00000223972.5\";";
+        let exon3 = GffObject::new(line).unwrap();
+        obj.add(exon1.clone());
+        obj.add(exon2.clone());
+        obj.add(exon3.clone());
+        assert_eq!(obj.num_elements(), 3);
+        let mut iter = obj.iter();
+        assert_eq!(iter.next().unwrap(), &exon1);
+        assert_eq!(iter.next().unwrap(), &exon2);
+        assert_eq!(iter.next().unwrap(), &exon3);
+
+        // iterate and print
+        obj.iter().for_each(|x| println!("{:?}", x));
     }
 }

@@ -4,7 +4,7 @@ use crate::object::{ GffObjectT };
 // What if objects can optionally inherit either only GffObjectT or ObjGroupT?
 
 pub trait GffObjectGroupT: GffObjectT{ // subtrait of GffObjectT defines a group of GffObjects which also behaves as a GffObjectT
-    fn iter(&self) -> Box<dyn Iterator<Item = &Self>>;
+    fn iter(&self) -> Box<dyn Iterator<Item = &Self> + '_>;
     fn add(&mut self, obj: Self);
     fn num_elements(&self) -> usize;
 }
