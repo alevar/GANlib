@@ -12,5 +12,5 @@ noodles-gff = "0.12.0"
 serde = { version = "1.0", features = ["derive"] }
 proptest = "1.0"
 
-bio = {git = "https://github.com/alevar/rust-bio.git", branch = "interval_trees"}
-#bio = {path = "../rust-bio"}
+#bio = {git = "https://github.com/alevar/rust-bio.git", branch = "interval_trees"}
+bio = {path = "../rust-bio"}

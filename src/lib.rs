@@ -8,7 +8,6 @@ pub mod exon;
 
 pub mod treader;
 
-mod txgroup;
 pub mod bundle;
 pub mod gene;
 pub mod transcriptome;
@@ -29,7 +28,7 @@ pub mod prelude {
 }
 
 pub use prelude::*;
-pub use txgroup::TXGroup;
+pub use bundle::Bundle;
 pub use factory::GffObjectFactory;
 
 #[cfg(test)]

@@ -1,10 +1,12 @@
 use std::collections::HashMap;
+use bio::data_structures::interval_tree::ArrayBackedIntervalTree;
 use bio::utils::Interval;
 use std::cmp::Ordering;
 use std::fmt::{Formatter,Display};
 use std::error::Error;
 
 
+use crate::bundle::GffObjectGroupT;
 use crate::transcript::Transcript;
 use crate::exon::Exon;
 
@@ -71,12 +73,12 @@ pub trait GffObjectT {
     fn len(&self) -> u32{
         (self.interval().end - self.interval().start)+1
     }
-    fn overlaps(&self, other: &Self) -> bool{
-        self.seqid() == other.seqid() && self.interval().overlaps(other.interval())
-    }
-    fn contains(&self, other: &Self) -> bool{
-        self.seqid() == other.seqid() && self.interval().contains(other.interval())
-    }
+    // fn overlaps(&self, other: &Self) -> bool{
+    //     self.seqid() == other.seqid() && self.interval().overlaps(other.interval())
+    // }
+    // fn contains(&self, other: &Self) -> bool{
+    //     self.seqid() == other.seqid() && self.interval().contains(other.interval())
+    // }
     
 }
 
@@ -91,7 +93,7 @@ pub struct GffObject {
     pub obj_type: Types,
     pub attrs: HashMap<String, String>,
     extra_attrs: HashMap<String,String>, // extra attributes that are not part of the GFF/GTF 9th column
-    children: Vec<GffObject>, // TODO: add children - any object should be able to inherit children when converted from something like transcript or gene, or anyhting else. It might not be able to do anything with the children, but should be able to store them
+    children: ArrayBackedIntervalTree<u32,GffObject>, // TODO: add children - any object should be able to inherit children when converted from something like transcript or gene, or anyhting else. It might not be able to do anything with the children, but should be able to store them
 }
 
 impl GffObject{
@@ -157,6 +159,18 @@ impl GffObjectT for GffObject {
     }
 }
 
+impl GffObjectGroupT for GffObject {
+    fn add(&mut self, obj: Self) {
+        self.children.insert(obj.interval().clone(), obj.clone());
+    }
+    fn num_elements(&self) -> usize {
+        self.children.len()
+    }
+    fn iter(&self) -> Box<dyn Iterator<Item = &Self>> {
+        Box::new(self.children.into_iter())
+    }
+}
+
 impl From<Exon> for GffObject {
     fn from(exon: Exon) -> GffObject {
         let mut obj = GffObject::default();
@@ -179,7 +193,7 @@ impl From<Transcript> for GffObject {
         obj.obj_type = tx.get_type();
         obj.attrs = tx.get_attrs().clone();
         for exon in tx.exons(){
-            obj.children.push(GffObject::from(exon.data().clone()));
+            obj.children.insert(exon.interval().clone(),GffObject::from(exon.data().clone()));
         }
         obj
     }
@@ -195,7 +209,7 @@ impl Default for GffObject {
             strand: '.',
             attrs: HashMap::new(),
             extra_attrs: HashMap::new(),
-            children: vec![],
+            children: ArrayBackedIntervalTree::new(),
         }
     }
 }

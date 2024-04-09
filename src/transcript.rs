@@ -1,10 +1,10 @@
 use std::collections::HashMap;
-use std::fmt::format;
 use bio::utils::Interval;
 use bio::data_structures::interval_tree::ArrayBackedIntervalTree;
 use std::cmp::Ordering;
 use std::error::Error;
 
+use crate::bundle::GffObjectGroupT;
 use crate::object::{GffObject, GffObjectT, Types};
 use crate::exon::Exon;
 
@@ -180,6 +180,20 @@ impl GffObjectT for Transcript {
         &mut self.attrs
     }
 }
+
+// impl GffObjectGroupT for Transcript {
+//     fn iter(&self) -> Box<dyn Iterator<Item = &Self>> {
+//         Box::new(self.exons.iter().map(|x| x.data()))
+//     }
+
+//     fn add(&mut self, obj: Self) {
+//         self.exons.insert(obj.interval().start..obj.interval().end, obj);
+//     }
+
+//     fn num_elements(&self) -> usize {
+//         self.exons.len()
+//     }
+// }
 
 impl Transcript{
     fn finalize(&mut self){
