@@ -181,19 +181,23 @@ impl GffObjectT for Transcript {
     }
 }
 
-// impl GffObjectGroupT for Transcript {
-//     fn iter(&self) -> Box<dyn Iterator<Item = &Self>> {
-//         Box::new(self.exons.iter().map(|x| x.data()))
-//     }
+impl GffObjectGroupT for Transcript {
+    type Child = Exon;
 
-//     fn add(&mut self, obj: Self) {
-//         self.exons.insert(obj.interval().start..obj.interval().end, obj);
-//     }
-
-//     fn num_elements(&self) -> usize {
-//         self.exons.len()
-//     }
-// }
+    fn add<T>(&mut self, obj: T)
+    where
+        T: GffObjectT + Into<Exon>,
+    {
+        let exon: Exon = obj.into();
+        self.exons.insert(exon.interval().clone(), exon);
+    }
+    fn num_elements(&self) -> usize {
+        self.exons.len()
+    }
+    fn iter(&self) -> impl Iterator<Item = &Self::Child> + '_ {
+        self.exons.into_iter().map(|entry| entry.data())
+    }
+}
 
 impl Transcript{
     fn finalize(&mut self){

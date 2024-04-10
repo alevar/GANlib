@@ -1,11 +1,16 @@
-use crate::object::{ GffObjectT };
+use crate::object::{ GffObjectT, GffObject };
+use crate::Exon;
 
 // we can define ObjGroupT as a trait to be inherited by Transcriptome, Bundle, Gene, etc
 // What if objects can optionally inherit either only GffObjectT or ObjGroupT?
-
 pub trait GffObjectGroupT: GffObjectT{ // subtrait of GffObjectT defines a group of GffObjects which also behaves as a GffObjectT
-    fn iter(&self) -> Box<dyn Iterator<Item = &Self> + '_>;
-    fn add(&mut self, obj: Self);
+    type Child: GffObjectT;
+
+    fn add<T>(&mut self, obj: T)
+    where
+        T: GffObjectT + Into<Exon> + Into<GffObject>;
+
+        fn iter(&self) -> impl Iterator<Item = &Self::Child> + '_;
     fn num_elements(&self) -> usize;
 }
 

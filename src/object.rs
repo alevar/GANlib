@@ -160,14 +160,20 @@ impl GffObjectT for GffObject {
 }
 
 impl GffObjectGroupT for GffObject {
-    fn add(&mut self, obj: Self) {
-        self.children.insert(obj.interval().clone(), obj.clone());
+    type Child = GffObject;
+
+    fn add<T>(&mut self, obj: T)
+    where
+        T: GffObjectT + Into<GffObject>,
+    {
+        let gff_object: GffObject = obj.into();
+        self.children.insert(gff_object.interval.clone(), gff_object);
     }
     fn num_elements(&self) -> usize {
         self.children.len()
     }
-    fn iter(&self) -> Box<dyn Iterator<Item = &Self> + '_> {
-        Box::new(self.children.into_iter().map(|entry| entry.data()))
+    fn iter(&self) -> impl Iterator<Item = &Self::Child> + '_ {
+        self.children.into_iter().map(|entry| entry.data())
     }
 }
 
@@ -497,6 +503,6 @@ mod tests {
         assert_eq!(iter.next().unwrap(), &exon3);
 
         // iterate and print
-        obj.iter().for_each(|x| println!("{:?}", x));
+        obj.iter().for_each(|x| println!("{:?}", x.gtf()));
     }
 }
