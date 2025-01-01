@@ -69,20 +69,18 @@ pub trait GffObjectT: EntryT<N = usize> {
 
 // implement a generic object type which can then be specialized into anything
 #[derive(Clone, Debug)]
-pub struct GffObject {
+pub(crate) struct GffObject { // GffObject is a generic object that can be specialized into types. Not exposed to force usage of the factory yielding specialized objects or construction via the specific object types
     pub seqid: String,
     pub strand: char,
     pub source: String,
     pub g_type: Types,
-    pub g_id: Option<String>,
-    pub g_parent_id: Option<String>,
     pub attrs: HashMap<String, String>,
     extra_attrs: HashMap<String,String>, // extra attributes that are not part of the GFF/GTF 9th column
     
     pub interval: Interval<usize>,
     children: ArrayBackedIntervalTree<GffObject>, // TODO: add children - any object should be able to inherit children when converted from something like transcript or gene, or anyhting else. It might not be able to do anything with the children, but should be able to store them
     indexed: bool,
-    parent: Option<NonNull<GffObject>>, // Pointer to the parent
+    pub parent: Option<NonNull<GffObject>>, // Pointer to the parent
 }
 
 impl Default for GffObject {
@@ -91,8 +89,6 @@ impl Default for GffObject {
             seqid: String::new(),
             source: String::from("GANLIB"),
             g_type: Types::Unknown,
-            g_id: None,
-            g_parent_id: None,
             strand: '.',
             attrs: HashMap::new(),
             extra_attrs: HashMap::new(),
@@ -152,7 +148,6 @@ impl TryFrom<&str> for GffObject {
             };
 
             obj.attrs = extract_attributes(lcs[8]);
-            (obj.g_id,obj.g_parent_id) = extract_ids(&obj.attrs, &obj.g_type);
 
             // add raw source information to the attributes just in case
             obj.extra_attrs = HashMap::new();

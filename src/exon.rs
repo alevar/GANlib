@@ -1,9 +1,14 @@
 use std::{collections::HashMap, cmp::Ordering};
+use bio::io::gff;
 use bio::utils::Interval;
 use std::error::Error;
+use std::ptr::NonNull;
 
 use crate::object::*;
+use crate::utils::*;
 use crate::transcript::Transcript;
+
+use bio::data_structures::interval_tree::{ArrayBackedIntervalTree, EntryT};
 
 // CDS should be represented within exons
 // transcript should store reference to the start of the cds
@@ -11,184 +16,106 @@ use crate::transcript::Transcript;
 
 #[derive(Clone, Debug)]
 pub struct Exon {
-    seqid: String,
-    strand: char,
-    interval: Interval<u32>,
-    cds_interval: Interval<u32>,
-    source: String,
-    tid: Option<String>,
-    gid: Option<String>,
-    attrs: HashMap<String, String>,
-    extra_attrs: HashMap<String, String>,
-    obj_type: Types,
+    base: GffObject,
+    transcript_id: Option<String>,
+    gene_id: Option<String>,
+    cds: Option<GffObject>, // TODO: change to CDS type potentially
 }
 
-impl From<GffObject> for Exon {
-    fn from(gff_object: GffObject) -> Self {
-        let mut exon = Exon {
-                                seqid: gff_object.seqid().to_string(),
-                                strand: gff_object.strand(),
-                                interval: gff_object.interval().clone(),
-                                cds_interval: Interval::new(0..0).unwrap(),
-                                source: gff_object.source().to_string(),
-                                obj_type: Types::Exon,
-                                attrs: gff_object.get_attrs().clone(),
-                                extra_attrs: HashMap::new(),
-                                tid: None,
-                                gid: None,
-                            };
-        // extract tid and gid
-        exon.tid = exon.get_attr("transcript_id").map(|x| x.to_string());
-        exon.gid = exon.get_attr("gene_id").map(|x| x.to_string());
-        exon
-    }
-}
-impl From<Transcript> for Exon {
-    fn from(tx: Transcript) -> Self {
-        let obj: GffObject = tx.into();
-        Self::from(obj)
-    }
-}
-
-impl Default for Exon {
-    fn default() -> Self {
-        Exon {
-            seqid: String::new(),
-            strand: '.',
-            source: String::from("GANLIB"),
-            interval: Interval::default(),
-            cds_interval: Interval::default(),
-            tid: None,
-            gid: None,
-            attrs: HashMap::new(),
-            extra_attrs: HashMap::new(),
-            obj_type: Types::Exon,
-        }
-    }
-}
-
-// public interface
 impl Exon {
-    pub fn new(line: &str) -> Result<Self,Box<dyn Error>> {
-        match GffObject::try_from(line){
-            Ok(obj) => Ok(Exon::from(obj)),
-            Err(e) => Err(e),
-        }
-    }
+    // Constructor to create an Exon from a GffObject
+    pub fn from(gff_obj: GffObject) -> Self {
+        let mut new_exon = Self {
+            base: gff_obj.clone(),
+            transcript_id: None,
+            gene_id: None,
+            cds: None,
+        };
 
-    pub fn set_cds(&mut self, cds: Interval<u32>) {
-        self.cds_interval = cds;
-    }
-    pub fn is_coding(&self) -> bool {
-        self.cds_interval.len() > 0
-    }
-
-    pub fn set_tid(&mut self, tid: String) {
-        self.tid = Some(tid);
-    }
-
-    pub fn set_gid(&mut self, gid: String) {
-        self.gid = Some(gid);
-    }
-
-    pub fn get_tid(&self) -> Option<&str> {
-        self.tid.as_deref()
-    }
-
-    pub fn get_gid(&self) -> Option<&str> {
-        self.gid.as_deref()
+        new_exon
     }
 }
 
 impl GffObjectT for Exon {
-    fn get_type(&self) -> Types {
-        Types::Transcript
+    fn new(line: &str) -> Result<Exon, Box<dyn Error>> {
+        Exon::try_from(line)
+    }
+    fn parent(&self) -> Option<&dyn GffObjectT> {
+        self.base.parent.and_then(|parent_ptr| unsafe { Some(parent_ptr.as_ref() as &dyn GffObjectT) })
     }
     fn seqid(&self) -> &str {
-        &self.seqid
+        &self.base.seqid
     }
     fn strand(&self) -> char {
-        self.strand
+        self.base.strand
     }
-    fn interval(&self) -> &Interval<u32> {
-        &self.interval
+    fn get_type(&self) -> Types {
+        Types::Exon
     }
     fn source(&self) -> &str {
-        &self.source
+        &self.base.source
     }
     fn bed(&self) -> String {
         format!("{}\t{}\t{}\t{}\t{}\t{}",
-                self.seqid,
-                self.interval.start,
-                self.interval.end,
-                self.tid.as_ref().unwrap_or(&String::from(".")),
-                self.score().unwrap_or(0.0),
-                self.strand,
-        )
+                self.base.seqid,
+                self.base.interval.start,
+                self.base.interval.end,
+                self.base.source,
+                self.base.score().unwrap_or(0.0),
+                self.base.strand)
     }
     fn gtf(&self) -> String {
         format!("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                self.seqid,
-                self.source,
-                self.obj_type,
-                self.interval.start,
-                self.interval.end,
+                self.base.seqid,
+                self.base.source,
+                Types::Exon,
+                self.base.interval.start,
+                self.base.interval.end,
                 self.score().unwrap_or(0.0),
-                self.strand,
+                self.base.strand,
                 self.phase().unwrap_or(0),
-                self.attrs.iter().map(|(k,v)| format!("{} \"{}\";", k, v)).collect::<Vec<String>>().join(" "))
+                self.base.attrs.iter().map(|(k,v)| format!("{} \"{}\";", k, v)).collect::<Vec<String>>().join(" "))
     }
     fn gff(&self) -> String {
         format!("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                                        self.seqid,
-                                        self.source,
-                                        self.obj_type,
-                                        self.interval.start,
-                                        self.interval.end,
-                                        self.score().unwrap_or(0.0),
-                                        self.strand,
-                                        self.phase().unwrap_or(0),
-                                        self.attrs.iter().map(|(k,v)| format!("{}={};", k, v)).collect::<Vec<String>>().join(" "))
+                self.base.seqid,
+                self.base.source,
+                Types::Exon,
+                self.base.interval.start,
+                self.base.interval.end,
+                self.score().unwrap_or(0.0),
+                self.base.strand,
+                self.phase().unwrap_or(0),
+                self.base.attrs.iter().map(|(k,v)| format!("{}={};", k, v)).collect::<Vec<String>>().join(" "))
     }
     fn get_attrs(&self) -> &HashMap<String, String> {
-        &self.attrs
+        &self.base.attrs
     }
     fn get_attrs_mut(&mut self) -> &mut HashMap<String, String> {
-        &mut self.attrs
+        &mut self.base.attrs
     }
 }
 
-impl Eq for Exon {}
-
-impl PartialEq for Exon {
-    fn eq(&self, other: &Self) -> bool {
-        self.strand == other.strand
-            && self.seqid == other.seqid
-            && self.interval == other.interval
-            && self.source == other.source
-            && self.obj_type == other.obj_type
-            && self.attrs == other.attrs
+impl TryFrom<&str> for Exon {
+    type Error = Box<dyn Error>;
+    fn try_from(line: &str) -> Result<Self,Self::Error> {
+        let mut obj = GffObject::try_from(line)?;
+        return Ok(Exon::from(obj));
     }
 }
 
-impl Ord for Exon {
-    fn cmp(&self, other: &Self) -> Ordering {
-        if self.seqid != other.seqid {
-            return self.seqid.cmp(&other.seqid);
-        } else if self.strand != other.strand {
-            return self.strand.cmp(&other.strand);
-        } else {
-            match self.interval().end.cmp(&other.interval().end) {
-                Ordering::Equal => self.interval().end.cmp(&other.interval().end),
-                other => other,
-            }
-        }
+impl EntryT for Exon {
+    type N = usize;
 
+    fn interval(&self) -> &Interval<Self::N> {
+        &self.base.interval
     }
 }
 
-impl PartialOrd for Exon {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
+impl<'a> EntryT for &'a Exon {
+    type N = usize;
+
+    fn interval(&self) -> &Interval<Self::N> {
+        &self.base.interval
     }
 }
