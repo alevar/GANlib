@@ -10,6 +10,7 @@ pub enum Types {
     UTR,
     Intron,
     Intergenic,
+    Other,
     Unknown,
 }
 
@@ -23,6 +24,7 @@ impl Display for Types {
             Types::UTR => "UTR",
             Types::Intron => "intron",
             Types::Intergenic => "intergenic",
+            Types::Other => "other",
             Types::Unknown => "unknown",
         })
     }

@@ -251,3 +251,24 @@ impl GffObject {
         GffObject::try_from(line)
     }
 }
+
+#[cfg(test)]
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_object_creation() {
+        let line = "chr1\ttest\tgene\t100\t200\t.\t+\t.\tgene_id \"test\"; gene_name \"test\";";
+        let obj = GffObject::new(line).unwrap();
+        assert_eq!(obj.seqid, "chr1");
+        assert_eq!(obj.source, "test");
+        assert_eq!(obj.g_type, Types::Gene);
+        assert_eq!(obj.interval.start, 100);
+        assert_eq!(obj.interval.end, 200);
+        assert_eq!(obj.strand, '+');
+        assert_eq!(obj.attrs.len(), 2);
+        assert_eq!(obj.attrs.get("gene_id").unwrap(), "test");
+        assert_eq!(obj.attrs.get("gene_name").unwrap(), "test");
+    }
+}

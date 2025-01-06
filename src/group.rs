@@ -10,13 +10,14 @@ use std::collections::HashMap;
 use std::cmp::Ordering;
 
 use crate::object::{GffObject, GffObjectT};
+use crate::transcript::TranscriptRef;
 use crate::utils::*;
 
 pub trait GffObjectGroupT {
     type Object: GffObjectT;
 
     fn new() -> Self;
-    fn add_object(&mut self, obj: Self::Object);
+    fn add_object(&mut self, obj: Self::Object) -> usize;
     fn get(&self, oid: usize) -> Option<&Self::Object>;
     fn get_mut(&mut self, oid: usize) -> Option<&mut Self::Object>;
     fn objects(&self) -> &ArrayBackedIntervalTree<Self::Object>;
@@ -37,8 +38,9 @@ impl GffObjectGroupT for Transcriptome {
         }
     }
 
-    fn add_object(&mut self, obj: Self::Object) {
+    fn add_object(&mut self, obj: Self::Object) -> usize {
         self.objects.insert(obj);
+        self.objects.len() - 1
     }
 
     fn get(&self, oid: usize) -> Option<&Self::Object> {
@@ -54,5 +56,11 @@ impl GffObjectGroupT for Transcriptome {
     }
     fn objects_mut(&mut self) -> &mut ArrayBackedIntervalTree<Self::Object> {
         &mut self.objects
+    }
+}
+
+impl Transcriptome {
+    pub fn get_transcript<'a>(&'a mut self, tid: usize) -> Option<TranscriptRef<'a, Transcriptome>> {
+        Some(TranscriptRef::new(self, tid))
     }
 }

@@ -7,7 +7,6 @@ use crate::utils::*;
 use bio::utils::Interval;
 use bio::data_structures::interval_tree::EntryT;
 
-#[derive(Debug)]
 pub struct TranscriptRef<'a, Group>
 where
     Group: GffObjectGroupT,
@@ -34,7 +33,8 @@ Group: GffObjectGroupT,
             .parent
             .objects_mut()
             .get_mut(child_id)
-            .unwrap();
+            .unwrap()
+            .set_type(gtype.clone());
         }
     }
 }
@@ -111,13 +111,56 @@ where
     }
 }
 
+impl<'a, Group> TranscriptRef<'a, Group>
+where
+    Group: GffObjectGroupT,
+{
+    pub fn new(parent: &'a mut Group, tid: usize) -> Self {
+        TranscriptRef { parent, tid }
+    }
+}
+
+impl<'a, Group> std::fmt::Display for TranscriptRef<'a, Group>
+where
+    Group: GffObjectGroupT,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "TranscriptRef: {{ tid: {} }}",
+            self.tid
+        )
+    }
+}
+
+impl<'a, Group> std::fmt::Debug for TranscriptRef<'a, Group>
+where
+    Group: GffObjectGroupT,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "TranscriptRef: {{ tid: {} }}",
+            self.tid
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::group::Transcriptome;
+    use crate::{group::Transcriptome, object::GffObject};
 
     #[test]
     fn test_transcript_ref() {
         let mut parent = Transcriptome::new();
+        let tline = "chr1\ttest\ttranscript\t1\t100\t.\t+\t.\tgene_id \"test\"; transcript_id \"test\";";
+        let tid = parent.add_object(GffObject::new(tline).unwrap());
+        let eline = "chr1\ttest\texon\t1\t100\t.\t+\t.\tgene_id \"test\"; transcript_id \"test\";";
+        let eid = parent.add_object(GffObject::new(eline).unwrap());
+        let mut tref = parent.get_transcript(tid).unwrap();
+        println!("{:?}", tref);
+        tref.change_exon_type(Types::Other);
+        println!("{:?}", tref);
     }
 }
