@@ -1,117 +1,123 @@
-use std::{collections::HashMap, cmp::Ordering};
-use bio::io::gff;
-use bio::utils::Interval;
-use std::error::Error;
-use std::ptr::NonNull;
+use std::collections::HashMap;
 
-use crate::object::*;
+use crate::group::GffObjectGroupT;
+use crate::object::GffObjectT;
 use crate::utils::*;
-use crate::exon::Exon;
 
-use bio::data_structures::interval_tree::{ArrayBackedIntervalTree, EntryT};
+use bio::utils::Interval;
+use bio::data_structures::interval_tree::EntryT;
 
-#[derive(Clone, Debug)]
-pub struct Transcript {
-    base: GffObject,
-    transcript_id: Option<String>,
-    gene_id: Option<String>,
-    exons: ArrayBackedIntervalTree<Exon>,
+#[derive(Debug)]
+pub struct TranscriptRef<'a, Group>
+where
+    Group: GffObjectGroupT,
+{
+    parent: &'a mut Group,
+    tid: usize,
 }
 
-impl Transcript {
-    // Constructor to create an Transcript from a GffObject
-    pub fn from(gff_obj: GffObject) -> Self {
-        let mut new_transcript = Self {
-            base: gff_obj.clone(),
-            transcript_id: None,
-            gene_id: None,
-            exons: ArrayBackedIntervalTree::new(),
-        };
+impl<'a, Group> TranscriptRef<'a, Group>
+where
+Group: GffObjectGroupT,
+{
+    pub fn change_exon_type(&mut self, gtype: Types) {
+        // example of how to apply changes to childred on an object
+        let children: Vec<usize> = self
+            .parent
+            .get(self.tid)
+            .unwrap()
+            .children()
+            .to_vec();
 
-        new_transcript
+        for child_id in children {
+            self
+            .parent
+            .objects_mut()
+            .get_mut(child_id)
+            .unwrap();
+        }
     }
 }
 
-impl GffObjectT for Transcript {
-    fn new(line: &str) -> Result<Transcript, Box<dyn Error>> {
-        Transcript::try_from(line)
+impl<'a, Group> EntryT for TranscriptRef<'a, Group>
+where
+    Group: GffObjectGroupT,
+{
+    type N = usize;
+
+    fn interval(&self) -> &Interval<Self::N> {
+        self.parent.get(self.tid).unwrap().interval()
     }
-    fn parent(&self) -> Option<&dyn GffObjectT> {
-        self.base.parent.and_then(|parent_ptr| unsafe { Some(parent_ptr.as_ref() as &dyn GffObjectT) })
-    }
+}
+
+impl<'a, Group> GffObjectT for TranscriptRef<'a, Group>
+where
+    Group: GffObjectGroupT,
+{
     fn seqid(&self) -> &str {
-        &self.base.seqid
+        self.parent.get(self.tid).unwrap().seqid()
     }
+
     fn strand(&self) -> char {
-        self.base.strand
+        self.parent.get(self.tid).unwrap().strand()
     }
+
     fn get_type(&self) -> Types {
-        Types::Transcript
+        self.parent.get(self.tid).unwrap().get_type()
     }
+
     fn source(&self) -> &str {
-        &self.base.source
+        self.parent.get(self.tid).unwrap().source()
     }
-    fn bed(&self) -> String {
-        format!("{}\t{}\t{}\t{}\t{}\t{}",
-                self.base.seqid,
-                self.base.interval.start,
-                self.base.interval.end,
-                self.base.source,
-                self.base.score().unwrap_or(0.0),
-                self.base.strand)
-    }
-    fn gtf(&self) -> String {
-        format!("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                self.base.seqid,
-                self.base.source,
-                Types::Transcript,
-                self.base.interval.start,
-                self.base.interval.end,
-                self.score().unwrap_or(0.0),
-                self.base.strand,
-                self.phase().unwrap_or(0),
-                self.base.attrs.iter().map(|(k,v)| format!("{} \"{}\";", k, v)).collect::<Vec<String>>().join(" "))
-    }
-    fn gff(&self) -> String {
-        format!("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                self.base.seqid,
-                self.base.source,
-                Types::Transcript,
-                self.base.interval.start,
-                self.base.interval.end,
-                self.score().unwrap_or(0.0),
-                self.base.strand,
-                self.phase().unwrap_or(0),
-                self.base.attrs.iter().map(|(k,v)| format!("{}={};", k, v)).collect::<Vec<String>>().join(" "))
-    }
+
     fn get_attrs(&self) -> &HashMap<String, String> {
-        &self.base.attrs
+        self.parent.get(self.tid).unwrap().get_attrs()
     }
-    fn get_attrs_mut(&mut self) -> &mut HashMap<String, String> {
-        &mut self.base.attrs
+
+    fn set_attr(&mut self, key: &str, value: String) {
+        self.parent
+            .objects_mut()
+            .get_mut(self.tid)
+            .unwrap()
+            .set_attr(key, value);
+    }
+
+    fn children(&self) -> &[usize] {
+        self.parent.get(self.tid).unwrap().children()
+    }
+
+    fn set_type(&mut self, gtype: Types) {
+        self.parent.objects_mut().get_mut(self.tid).unwrap().set_type(gtype);
+    }
+
+    fn bed(&self) -> String {
+        self.parent.get(self.tid).unwrap().bed()
+    }
+
+    fn gtf(&self) -> String {
+        self.parent.get(self.tid).unwrap().gtf()
+    }
+
+    fn gff(&self) -> String {
+        self.parent.get(self.tid).unwrap().gff()
+    }
+
+    fn score(&self) -> Option<f32> {
+        self.parent.get(self.tid).unwrap().score()
+    }
+
+    fn phase(&self) -> Option<u32> {
+        self.parent.get(self.tid).unwrap().phase()
     }
 }
 
-impl TryFrom<&str> for Transcript {
-    type Error = Box<dyn Error>;
-    fn try_from(line: &str) -> Result<Self,Self::Error> {
-        let mut obj = GffObject::try_from(line)?;
-        return Ok(Transcript::from(obj));
-    }
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::group::Transcriptome;
 
-impl EntryT for Transcript {
-    type N = usize;
-
-    fn interval(&self) -> &Interval<Self::N> {
-        &self.base.interval
-    }
-}
-
-impl<'a> EntryT for &'a Transcript {
-    type N = usize;
-
-    fn interval(&self) -> &Interval<Self::N> {
-        &self.base.interval
+    #[test]
+    fn test_transcript_ref() {
+        let mut parent = Transcriptome::new();
     }
 }
