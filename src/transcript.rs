@@ -82,6 +82,18 @@ where
             .set_attr(key, value);
     }
 
+    fn id(&self) -> Option<usize> {
+        Some(self.tid)
+    }
+
+    fn add_child(&mut self, child: &dyn GffObjectT) {
+        self.parent
+            .objects_mut()
+            .get_mut(self.tid)
+            .unwrap()
+            .add_child(child);
+    }
+
     fn children(&self) -> &[usize] {
         self.parent.get(self.tid).unwrap().children()
     }

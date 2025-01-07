@@ -48,8 +48,12 @@ impl GffObjectGroupT for Transcriptome {
     fn add_object(&mut self, obj: Self::Object) -> usize {
         self.is_indexed = false;
         // after inserting the object - set its ID to the index in the tree
-        // add entry to the id_map if id_str is present
         let oid = self.objects.insert(obj);
+        self.objects.get_mut(oid).unwrap().id = Some(oid);
+        // add entry to the id_map if id_str is present
+        if let Some(id_str) = self.objects.get(oid).unwrap().id_str.clone() {
+            self.id_map.insert(id_str, oid);
+        }
         oid
     }
 
@@ -97,43 +101,81 @@ impl Transcriptome {
         self.is_indexed = true;
     }
 
-    fn finalize(&mut self) {
+    pub fn create_parent(&mut self, obj: &GffObject) -> Result<usize, Box<dyn Error>> {
+        // create a parent object for the given object
+        // return the ID of the parent object
+        // if the parent object already exists, return its ID
+        // if the parent object does not exist, create it and return its ID
+        // if the parent object can not be created, return an error
+
+        // make sure the type is compatible with the type of parent ID extracted
+        // for example, exon should have transcript_id (but should also check for the available gene_id as well to be propagated upwards)
+        // when creating the parent object - can provide it with the current attribtues, and let it extract form them what is needed
+        let mut parent_id: Option<usize> = None;
+        match obj.g_type {
+            Types::Transcript => {
+                // create gene object
+            }
+            Types::Exon | Types::CDS => {
+                // create transcript object
+            },
+            _ => {
+                // create parent object based on the type of the object
+            }
+        }
+        match parent_id {
+            Some(pid) => Ok(pid),
+            None => Err("Parent object could not be created")?,
+        }
+    }
+
+    pub fn reset_intervals(&mut self) {
+        // objects themselves have no colntrol over the intervals of their children, since children are stored as indices only
+        // after children have been added to an object
+        // we need to make sure parents have intervals that cover all of their children end-to-end
+        
+        // for each object, get the min(start), max(end) of its children
+        // set the interval of the object to cover all of its children
+        // propagate further recursively, so that the parents of the object also have intervals that cover all of their children
+    }
+
+    fn finalize(&mut self) -> Result<(), Box<dyn Error>> {
         // finalize the internals of the tree
         // use the attributes of the objects, to figure out the parent/child relationships and set children/parent fields accordingly
         
+        // we can not borrow and modify the objects at the same time
+        // so we will create a new vector of objects with the correct parent/child relationships
+        let mut hierarchy_updates: Vec<(usize, GffObject)> = Vec::new(); // TODO: ideally we do not create copies here, since some internals are heavy (attributes, for example)
+        // collect parent-child relationships
         for obj in &self.objects {
-            let id_str = obj.id_str.clone();
-            let parent_id_str = obj.parent_id_str.clone();
-            // if parent is not None and parent object exists with the correct ID
-            // get parent index and set it as the parent of the current object and add the current object to the parent's children
-            match parent_id_str {
-                Some(parent_id_str) => {
-                    if let Some(parent_oid) = self.id_map.get(&parent_id_str) {
-                        let parent_obj = self.objects.get(*parent_oid).unwrap();
-                    }
+            // make sure each object already has an ID assigned (should be handled when creating transcriptome)
+            if (obj.id.is_none()){
+                Err("Object does not have an ID assigned")?;
+            }
+            if let Some(parent_id_str) = obj.parent_id_str.clone() {
+                // check if parent already exists
+                if let Some(parent_oid) = self.id_map.get(&parent_id_str) {
+                    hierarchy_updates.push((*parent_oid, obj.clone()));
                 }
-                None => {
-                    // if parent is None - and object is of lower types (Exon, CDS, etc)
-                    // create a new parent object with the correct ID and add the current object to its children
-                    unimplemented!()
-                },
+                {
+                    // TODO: parent not found but an ID for it exists
+                    // need to create parent object
+                    // recursively create parent objects based on the type of the current object, reconstructing the necessary components
+                    // unimplemented!()
+                }
             }
         }
-        
-        
-        
-        
-        
-        
-        // let attr_id_str = self.objects.get(oid).unwrap().id_str.clone();
-        // match attr_id_str {
-        //     Some(attr_id_str) => {
-        //         self.id_map.insert(attr_id_str, oid);
-        //     }
-        //     None => (),
-        // }
-        // // check parent - if present
-        // let attr_parent_id_str = self.objects.get(oid).unwrap().parent_id_str.clone();
+
+        // Assigning parent/child relationships to the objects
+        for (parent_id, child_obj) in hierarchy_updates {
+            if let Some(parent_obj) = self.objects.get_mut(parent_id) {
+                parent_obj.add_child(&child_obj);
+            } else {
+                Err("Parent object not found")?;
+            }
+        }
+
+        Ok(())
     }
 
     pub fn get_transcript<'a>(&'a mut self, tid: usize) -> Option<TranscriptRef<'a, Transcriptome>> {
@@ -148,11 +190,20 @@ mod tests {
     use std::io::Write;
 
     #[test]
-    fn test_transcriptome() -> Result<(), Box<dyn Error>> {
+    fn test_transcriptome() {
         let mut transcriptome = Transcriptome::new();
-        let obj = GffObject::new("chr1\ttest\texon\t1\t100\t.\t+\t.\tgene_id \"test\"; transcript_id \"test\";", false)?;
-        let oid = transcriptome.add_object(obj);
-        Ok(())
+        match GffObject::new("chr1\ttest\texon\t1\t100\t.\t+\t.\tgene_id \"test\"; transcript_id \"test\";", false) {
+            Ok(obj) => {
+                let oid = transcriptome.add_object(obj);
+                let tobj = transcriptome.get(oid);
+                let assigned_oid = tobj.unwrap().id.unwrap();
+                assert_eq!(assigned_oid, oid);
+            },
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                assert!(false);
+            }
+        }
     }
 
     #[test]
@@ -165,7 +216,9 @@ mod tests {
         writeln!(file, "chr1\ttest\texon\t1\t100\t.\t+\t.\tgene_id \"test\"; transcript_id \"test\";").unwrap();
         file.flush().unwrap();
 
-        let transcriptome = Transcriptome::from_file(fname).unwrap();
+        let mut transcriptome = Transcriptome::from_file(fname).unwrap();
+        let res = transcriptome.finalize();
+        assert!(res.is_ok());
         assert_eq!(transcriptome.objects().len(), 2);
 
         std::fs::remove_file(fname).unwrap();

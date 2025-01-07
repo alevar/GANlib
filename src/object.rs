@@ -41,7 +41,9 @@ pub trait GffObjectT: EntryT<N = usize> + std::fmt::Debug {
         (self.interval().end - self.interval().start) + 1
     }
 
+    fn id(&self) -> Option<usize>; // returns unique idenfier of the object
     fn children(&self) -> &[usize];
+    fn add_child(&mut self, child: &dyn GffObjectT);
 
     fn set_type(&mut self, gtype: Types);
 
@@ -246,8 +248,18 @@ impl GffObjectT for GffObject {
         self.attrs.insert(key.to_string(), value);
     }
 
+    fn id(&self) -> Option<usize> {
+        self.id
+    }
+
     fn children(&self) -> &[usize] {
         &self.children
+    }
+
+    fn add_child(&mut self, child: &dyn GffObjectT) {
+        // add child ID to the children vector
+        
+        self.children.push(child.id().unwrap());
     }
 
     fn set_type(&mut self, gtype: Types) {

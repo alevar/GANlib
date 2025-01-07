@@ -43,6 +43,7 @@ impl ObjectManager {
 
 #[cfg(test)]
 mod tests {
+    use bio::utils::Interval;
     use super::*;
 
     #[test]
@@ -64,5 +65,16 @@ mod tests {
                 obj.id, obj.parent_id, obj.children
             );
         }
+    }
+
+    #[test]
+    fn test_mut_interval() {
+        let mut interval = Interval::new(1..10).unwrap();
+        assert_eq!(interval.start, 1);
+        assert_eq!(interval.end, 10);
+        interval.start = 5;
+        interval.end = 15;
+        assert_eq!(interval.start, 5);
+        assert_eq!(interval.end, 15);
     }
 }
