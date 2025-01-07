@@ -4,6 +4,8 @@ use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 
 use crate::object::{GffObject, GffObjectT};
 
+use crate::utils::*;
+
 // single treader - private struct to parse over a single file
 // used in TReader to parse over multiple simultaneously
 struct STReader {
@@ -36,49 +38,38 @@ impl STReader{
     }
 
     fn _set_gff(&mut self) -> Result<(),Box<dyn Error>> {
-        let mut gff_result = None;
-
         for line in self.reader.by_ref().lines() {
-
             let line = line.unwrap();
             if line.starts_with('#') {
                 continue;
             }
             let lcs: Vec<&str> = line.trim().split('\t').collect();
             if lcs.len() != 9 {
-                gff_result = None;
                 break;
             }
             if !["transcript", "exon", "CDS"].contains(&lcs[2]) {
-                gff_result = None;
                 break;
             }
             if lcs[2] == "transcript" {
-                if lcs[8].starts_with("ID=") {
-                    gff_result = Some(true);
-                    break;
-                } else if lcs[8].starts_with("transcript_id") {
-                    gff_result = Some(false);
-                    break;
-                } else {
-                    gff_result = None;
-                    break;
-                }
+                self.is_gff = Some(is_gff(&line)?);
+            }
+        }
+
+        match self.is_gff {
+            Some(_) => (),
+            None => {
+                return Err("Couldn't determine the file format. No suitable lines found.".into());
             }
         }
     
         self.reader.rewind().unwrap();
-        
-        match gff_result{
-            None => Err("Unable to determine file format".into()),
-            Some(gff) => {
-                self.is_gff = Some(gff);
-                Ok(())
-            }
-        }
+
+        Ok(())
     }
 
     pub fn is_gff(&mut self) -> bool {
+        // if is_gff hasn't been set - set it
+        // return is_gff value
         if self.is_gff.is_none() {
             self._set_gff().unwrap();
         }
@@ -141,18 +132,18 @@ impl TReader {
 }
 
 impl Iterator for TReader {
-    type Item = Box<dyn GffObjectT>;
+    type Item = GffObject;
     fn next(&mut self) -> Option<Self::Item>{
         // iterate over readers
         for (i,reader) in self.readers.iter_mut().enumerate() {
             // if reader is not empty, return line
             if let Some(l) = reader.next() {
                 
-                let robj = match GffObject::new(l.as_str()) {
+                let robj = match GffObject::new(l.as_str(),reader.is_gff()) {
                     Ok(robj) => robj,
                     Err(e) => {panic!("Error parsing line: {}",e);},
                 };
-                return Some(Box::new(robj));
+                return Some(robj);
             }
         }
         None

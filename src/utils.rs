@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fmt::{Formatter, Display};
+use std::error::Error;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Types {
@@ -36,10 +37,8 @@ impl Default for Types {
     }
 }
 
-pub fn extract_attributes(attr_str: &str) -> HashMap<String, String> {
+pub fn extract_attributes(attr_str: &str, is_gff: bool) -> HashMap<String, String> {
     let mut attrs = HashMap::new();
-
-    let is_gff = attr_str.contains('=');
 
     if is_gff {
         for pair in attr_str.split(';').map(str::trim).filter(|s| !s.is_empty()) {
@@ -60,40 +59,45 @@ pub fn extract_attributes(attr_str: &str) -> HashMap<String, String> {
     attrs
 }
 
-pub fn extract_ids(attrs: &HashMap<String, String>, feature_type: &Types) -> (Option<String>, Option<String>) {
-    // if GFF
-    if attrs.contains_key("id") {
-        let id = attrs.get("id").cloned();
-        let parent = attrs.get("parent").cloned();
-        return (id, parent);
-    }
-
-    // Else must be GTF
-    let id_key = match feature_type {
-        Types::Gene => Some("gene_id"),
-        Types::Transcript => Some("transcript_id"),
-        _ => None,
-    };
-    let parent_id_key = match feature_type {
-        Types::Gene => None,
-        Types::Transcript => Some("gene_id"),
-        Types::Exon | Types::CDS | Types::Intron | Types::UTR => Some("transcript_id"),
-        _ => Some("transcript_id"),
-    };
-
-    let id = id_key.and_then(|k| attrs.get(k).cloned());
-    let parent_id = parent_id_key.and_then(|k| attrs.get(k).cloned());
-
-    (id, parent_id)
-}
-
-fn cleanup_attributes(attrs: &mut HashMap<String, String>) {
-    let keys: Vec<String> = attrs.keys().map(|k| k.to_string()).collect();
-    for key in keys {
-        if key == "gene_id" || key == "transcript_id" || key == "id" || key == "parent" {
-            attrs.remove(&key);
+pub fn extract_id(attrs: &HashMap<String, String>, feature_type: &Types, is_gff: bool) -> Option<String> {
+    if is_gff {
+        if let Some(id) = attrs.get("id") {
+            return Some(id.clone());
+        }
+    } else {
+        let id_key = match feature_type {
+            Types::Gene => Some("gene_id"),
+            Types::Transcript => Some("transcript_id"),
+            _ => None,
+        };
+        if let Some(key) = id_key {
+            if let Some(id) = attrs.get(key) {
+                return Some(id.clone());
+            }
         }
     }
+    None
+}
+
+pub fn extract_parent_id(attrs: &HashMap<String, String>, feature_type: &Types, is_gff: bool) -> Option<String> {
+    if is_gff {
+        if let Some(parent) = attrs.get("parent") {
+            return Some(parent.clone());
+        }
+    } else {
+        let parent_id_key = match feature_type {
+            Types::Gene => None,
+            Types::Transcript => Some("gene_id"),
+            Types::Exon | Types::CDS | Types::Intron | Types::UTR => Some("transcript_id"),
+            _ => Some("transcript_id"),
+        };
+        if let Some(key) = parent_id_key {
+            if let Some(parent) = attrs.get(key) {
+                return Some(parent.clone());
+            }
+        }
+    }
+    None
 }
 
 fn get_attr_value(attrs: &HashMap<String, String>, keys: &[&str]) -> Option<String> {
@@ -113,6 +117,49 @@ fn get_attr_value(attrs: &HashMap<String, String>, keys: &[&str]) -> Option<Stri
     value
 }
 
+pub fn attr_is_gff(attrs: &str) -> Result<bool,Box<dyn Error>> {
+    // remove any trailing whitespace and last ; if present
+    // split by ; and remove any leading or trailing whitespace
+    let attrs_vec: Vec<&str> = attrs.trim().trim_end_matches(';').split(';').map(str::trim).collect();
+
+    // if any attribute string begins with ID= or Parent=
+    // and every attribute string has "="
+    // then is GFF
+    let is_gff = attrs_vec.
+        iter().
+        any(|a| a.starts_with("ID=") || a.starts_with("Parent=")) && attrs_vec.iter().all(|a| a.contains('='));
+
+    if is_gff {
+        return Ok(true);
+    }
+    // if not GFF - need to validate GTF
+    // make sure each pair has at least one space followed by \" and ending with \"
+    let is_gtf = attrs_vec.iter().all(|a| a.contains(" \"") && a.ends_with("\""));
+    if is_gtf {
+        return Ok(false);
+    }
+    else{
+        return Err("Cannot determine format".into());
+    }
+}
+
+// given a gtf/gff line - determine format
+pub fn is_gff(line: &str) -> Result<bool,Box<dyn Error>> { // return true if GFF, false if GTF
+    // if line starts with # - ERror
+    if line.starts_with('#') {
+       return Err("Cannot determine format from comment line".into());
+    }
+
+    // split line by tab
+    let lcs: Vec<&str> = line.trim().split('\t').collect();
+    // if not 9 columns - return error
+    if lcs.len() != 9 {
+        return Err("Invalid number of columns".into());
+    }
+
+    attr_is_gff(lcs[8])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -120,33 +167,37 @@ mod tests {
     #[test]
     fn test_extract_attributes() {
         let gff_line = "ID=gene1; gene_name=GENE1";
-        let gff_attrs = extract_attributes(gff_line);
+        let gff_attrs = extract_attributes(gff_line,true);
         assert_eq!(gff_attrs.len(), 2);
 
         let gtf_line = "gene_id \"gene1\"; gene_name \"GENE1\"";
-        let gtf_attrs = extract_attributes(gtf_line);
+        let gtf_attrs = extract_attributes(gtf_line,false);
         assert_eq!(gtf_attrs.len(), 2);
     }
 
     #[test]
     fn test_extract_ids() {
         let gff_line = "ID=gene1; gene_name=GENE1";
-        let gff_attrs = extract_attributes(gff_line);
-        let (id, parent) = extract_ids(&gff_attrs, &Types::Gene);
+        let gff_attrs = extract_attributes(gff_line,true);
+        let id = extract_id(&gff_attrs, &Types::Gene, true);
+        let parent = extract_parent_id(&gff_attrs, &Types::Gene, true);
         assert_eq!(id, Some("gene1".to_string()));
         assert_eq!(parent, None);
 
         let gtf_line = "gene_id \"g1\"; transcript_id \"t1\"";
-        let gtf_attrs = extract_attributes(gtf_line);
-        let (id, parent) = extract_ids(&gtf_attrs, &Types::Transcript);
+        let gtf_attrs = extract_attributes(gtf_line,false);
+        let id = extract_id(&gtf_attrs, &Types::Transcript, false);
+        let parent = extract_parent_id(&gtf_attrs, &Types::Transcript, false);
         assert_eq!(id, Some("t1".to_string()));
         assert_eq!(parent, Some("g1".to_string()));
 
-        let (id, parent) = extract_ids(&gtf_attrs, &Types::Gene);
+        let id = extract_id(&gtf_attrs, &Types::Gene, false);
+        let parent = extract_parent_id(&gtf_attrs, &Types::Gene, false);
         assert_eq!(id, Some("g1".to_string()));
         assert_eq!(parent, None);
 
-        let (id, parent) = extract_ids(&gtf_attrs, &Types::Exon);
+        let id = extract_id(&gtf_attrs, &Types::Exon, false);
+        let parent = extract_parent_id(&gtf_attrs, &Types::Exon, false);
         assert_eq!(id, None);
         assert_eq!(parent, Some("t1".to_string()));
     }

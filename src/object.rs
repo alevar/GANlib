@@ -68,10 +68,13 @@ pub struct GffObject {
     pub attrs: HashMap<String, String>,
     extra_attrs: HashMap<String,String>, // extra attributes that are not part of the GFF/GTF 9th column
     
-    pub id: Option<usize>,
+    pub id: Option<usize>, // numerical ID assigned by container or otherwise
     pub interval: Interval<usize>,
     pub children: Vec::<usize>,
-    pub parent: Option<usize>,
+    pub parent: Option<usize>, // numerical ID of parent object
+
+    pub id_str: Option<String>, // id as extracted from the attributes
+    pub parent_id_str: Option<String>, // parent as extracted from the attributes
 }
 
 impl Default for GffObject {
@@ -88,6 +91,9 @@ impl Default for GffObject {
             interval: Interval::new(0..0).unwrap(),
             children: Vec::new(),
             parent: None,
+
+            id_str: None,
+            parent_id_str: None,
         }
     }
 }
@@ -109,9 +115,9 @@ impl<'a> EntryT for &'a GffObject {
 }
 
 // implementation of from for GffObject conversion from string
-impl TryFrom<&str> for GffObject {
+impl TryFrom<(&str, bool)> for GffObject {
     type Error = Box<dyn Error>;
-    fn try_from(line: &str) -> Result<Self,Self::Error> {
+    fn try_from((line, is_gff): (&str, bool)) -> Result<Self, Self::Error> {
         // parse line (gtf or gff)
         let mut obj = GffObject::default();
         
@@ -138,7 +144,10 @@ impl TryFrom<&str> for GffObject {
                 _ => Types::Unknown,
             };
 
-            obj.attrs = extract_attributes(lcs[8]);
+            obj.attrs = extract_attributes(lcs[8], is_gff);
+            // cleanup attributes and set id and parent if available
+            obj.id_str = extract_id(&obj.attrs, &obj.g_type, is_gff);
+            obj.parent_id_str = extract_parent_id(&obj.attrs, &obj.g_type, is_gff);
 
             // add raw source information to the attributes just in case
             obj.extra_attrs = HashMap::new();
@@ -247,8 +256,8 @@ impl GffObjectT for GffObject {
 }
 
 impl GffObject {
-    pub fn new(line: &str) -> Result<GffObject, Box<dyn Error>> {
-        GffObject::try_from(line)
+    pub fn new(line: &str, is_gff: bool) -> Result<GffObject, Box<dyn Error>> {
+        GffObject::try_from((line, is_gff))
     }
 }
 
@@ -260,7 +269,7 @@ mod tests {
     #[test]
     fn test_object_creation() {
         let line = "chr1\ttest\tgene\t100\t200\t.\t+\t.\tgene_id \"test\"; gene_name \"test\";";
-        let obj = GffObject::new(line).unwrap();
+        let obj = GffObject::new(line, false).unwrap();
         assert_eq!(obj.seqid, "chr1");
         assert_eq!(obj.source, "test");
         assert_eq!(obj.g_type, Types::Gene);

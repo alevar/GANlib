@@ -155,9 +155,9 @@ mod tests {
     fn test_transcript_ref() {
         let mut parent = Transcriptome::new();
         let tline = "chr1\ttest\ttranscript\t1\t100\t.\t+\t.\tgene_id \"test\"; transcript_id \"test\";";
-        let tid = parent.add_object(GffObject::new(tline).unwrap());
+        let tid = parent.add_object(GffObject::new(tline,false).unwrap());
         let eline = "chr1\ttest\texon\t1\t100\t.\t+\t.\tgene_id \"test\"; transcript_id \"test\";";
-        let eid = parent.add_object(GffObject::new(eline).unwrap());
+        let eid = parent.add_object(GffObject::new(eline,false).unwrap());
         let mut tref = parent.get_transcript(tid).unwrap();
         println!("{:?}", tref);
         tref.change_exon_type(Types::Other);

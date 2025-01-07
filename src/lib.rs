@@ -3,6 +3,7 @@ pub mod object;
 pub mod group;
 pub mod transcript;
 pub mod treader;
+pub mod learning;
 
 pub mod prelude {
     pub use crate::object::GffObjectT;
