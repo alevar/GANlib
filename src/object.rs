@@ -11,7 +11,7 @@ use std::cmp::Ordering;
 
 use crate::utils::*;
 
-pub trait GffObjectT: EntryT<N = usize> {
+pub trait GffObjectT: EntryT<N = usize> + std::fmt::Debug {
     fn seqid(&self) -> &str;
     fn strand(&self) -> char;
     fn get_type(&self) -> Types;
